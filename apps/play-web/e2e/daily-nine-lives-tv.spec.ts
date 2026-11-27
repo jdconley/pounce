@@ -44,7 +44,7 @@ async function bundle(): Promise<{ js: string; css: string }> {
 }
 
 /** A 1080p TV page whose stage is `w` by `h`, the watch view mounted in it at `state`. */
-async function mount(page: Page, w: number, h: number, cells: number[]) {
+async function mount(page: Page, w: number, h: number, cells: number[], extra: Record<string, unknown> = {}) {
   const { js, css } = await bundle();
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.setContent(`<!doctype html><html><head><style>${css}
@@ -53,8 +53,9 @@ async function mount(page: Page, w: number, h: number, cells: number[]) {
   </style></head><body><div id="stage"></div></body></html>`);
   await page.addScriptTag({ content: js });
   await page.evaluate(
-    ([givens, cells]) => (window as unknown as { __mount: (el: Element, p: unknown) => void }).__mount(document.getElementById("stage")!, { puzzle: { givens }, state: { cells, hinted: [] } }),
-    [SAMPLE.givens, cells] as const,
+    ([givens, cells, extra]) =>
+      (window as unknown as { __mount: (el: Element, p: unknown) => void }).__mount(document.getElementById("stage")!, { puzzle: { givens }, state: { cells, hinted: [], ...extra } }),
+    [SAMPLE.givens, cells, extra] as const,
   );
   await page.locator(".nl-board").waitFor();
   await page.evaluate(() => document.fonts.ready);
@@ -98,3 +99,42 @@ test.describe("Nine Lives on a TV", () => {
     });
   }
 });
+
+/** Midway on the lives rules: one life gone to a wrong number still showing, one hint used. */
+const firstOpen = SAMPLE.givens.findIndex((d, i) => d === 0 && MIDWAY[i] === 0);
+const LIVES_STATE = { rules: "lives", lives: 2, hintsLeft: 2, wrong: [{ i: firstOpen, d: (SAMPLE.solution[firstOpen]! % 9) + 1 }] };
+
+test.describe("Nine Lives on a TV, with lives", () => {
+  for (const [w, h] of [
+    [1792, 848],
+    [848, 1792],
+    [1200, 1200],
+  ] as const) {
+    test(`a ${w} by ${h} stage fits the quilt, the lives and hints left, apart and readable`, async ({ page }, info) => {
+      test.skip(info.project.name !== "tv-chrome", "the TV project only");
+      await mount(page, w, h, MIDWAY, LIVES_STATE);
+      await page.screenshot({ path: info.outputPath(`nine-lives-tv-lives-${w}x${h}.png`) });
+      const stage = (await page.locator("#stage").boundingBox())!;
+      const board = (await page.locator(".nl-board").boundingBox())!;
+      const panel = (await page.locator(".nl-watch-panel").boundingBox())!;
+      const inside = (b: { x: number; y: number; width: number; height: number }) =>
+        b.x >= stage.x - 0.5 && b.y >= stage.y - 0.5 && b.x + b.width <= stage.x + stage.width + 0.5 && b.y + b.height <= stage.y + stage.height + 0.5;
+      expect(inside(board), "the quilt inside the stage").toBe(true);
+      expect(inside(panel), "lives and hints inside the stage").toBe(true);
+      const apart = panel.x >= board.x + board.width || panel.y >= board.y + board.height * 1.014;
+      expect(apart, "lives and hints clear of the quilt and its lip").toBe(true);
+      // The quilt still as large as it can be beside them; on the wide TV stage, as tall as it.
+      if (w === 1792) expect(board.height).toBeGreaterThanOrEqual(h / 1.014 - 1);
+      const short = Math.min(w, h);
+      const line = await page.locator(".nl-watch-line").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      const head = (await page.locator(".nl-life").first().boundingBox())!;
+      console.log(`nine lives tv lives ${w}x${h}: board ${board.width.toFixed(0)}, line ${line}px, head ${head.width.toFixed(0)}px`);
+      expect(line, "hints left, px at 1080p").toBeGreaterThanOrEqual(short / 20);
+      expect(head.width, "a life, px at 1080p").toBeGreaterThanOrEqual(short / 11);
+      await expect(page.locator(".nl-watch-line")).toHaveText("2 hints left");
+      await expect(page.locator(".nl-lost")).toHaveCount(1);
+      await expect(page.locator(`[data-cell="${firstOpen}"] .nl-clash`)).toHaveCount(1);
+    });
+  }
+});
+

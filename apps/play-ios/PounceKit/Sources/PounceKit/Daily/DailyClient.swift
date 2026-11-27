@@ -9,10 +9,17 @@ import Foundation
 /// The daily routes. A 404 from `start` or `board` means the server has the Dish off: hide it.
 public protocol DailyService: Sendable {
     func start(game: String, person: String?) async throws -> DailyStart
+    /// The same, asking for a game's `rules` at the run's first start (`{ "rules": "lives" }`).
+    /// A service that knows one set of rules leaves it to the default, which ignores them.
+    func start(game: String, person: String?, rules: String?) async throws -> DailyStart
     func moves(run: String, body: DailyMovesBody, person: String?) async throws -> DailyMovesAnswer
     /// `hints`: the hints used so far, so a resent hint costs nothing more.
     func hint(run: String, hints: Int, person: String?) async throws -> DailyMovesAnswer
+    /// The same, with the run's active time (`## Active time`).
+    func hint(run: String, hints: Int, activeMs: Int64?, person: String?) async throws -> DailyMovesAnswer
     func giveUp(run: String, person: String?) async throws -> DailyMovesAnswer
+    /// The same, with the run's active time.
+    func giveUp(run: String, activeMs: Int64?, person: String?) async throws -> DailyMovesAnswer
     func showOnTV(run: String, on: Bool, person: String?) async throws
     func board(date: String?, person: String?) async throws -> DailyBoard
     func stats(person: String?) async throws -> DailyStatsList
@@ -20,6 +27,21 @@ public protocol DailyService: Sendable {
     func linkBoard(_ key: ScreenKey, person: String?) async throws
     /// Every TV showing this person's board forgets it.
     func unlinkBoard(person: String?) async throws
+}
+
+/// Defaults for a service that knows no rules and no active time (the tests' fakes, the demos).
+extension DailyService {
+    public func start(game: String, person: String?, rules: String?) async throws -> DailyStart {
+        try await start(game: game, person: person)
+    }
+
+    public func hint(run: String, hints: Int, activeMs: Int64?, person: String?) async throws -> DailyMovesAnswer {
+        try await hint(run: run, hints: hints, person: person)
+    }
+
+    public func giveUp(run: String, activeMs: Int64?, person: String?) async throws -> DailyMovesAnswer {
+        try await giveUp(run: run, person: person)
+    }
 }
 
 extension APIClient: DailyService {
@@ -31,8 +53,15 @@ extension APIClient: DailyService {
         part.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? part
     }
 
+    /// Asks for the rules this app plays (`DailyGameInfo.rules`) even when the caller doesn't say:
+    /// a Nine Lives start without them puts an open lives run back on the first rules for good.
     public func start(game: String, person: String?) async throws -> DailyStart {
-        let data = try await authenticated("POST", "/v1/daily/\(Self.path(game))/start", body: nil, query: Self.who(person))
+        try await start(game: game, person: person, rules: DailyCatalog.info(game)?.rules)
+    }
+
+    public func start(game: String, person: String?, rules: String?) async throws -> DailyStart {
+        let body: [String: String]? = rules.map { ["rules": $0] }
+        let data = try await authenticated("POST", "/v1/daily/\(Self.path(game))/start", body: body, query: Self.who(person))
         return try decode(DailyStart.self, from: data, status: 200)
     }
 
@@ -42,12 +71,22 @@ extension APIClient: DailyService {
     }
 
     public func hint(run: String, hints: Int, person: String?) async throws -> DailyMovesAnswer {
-        let data = try await authenticated("POST", "/v1/daily/runs/\(Self.path(run))/hint", body: ["hints": hints], query: Self.who(person))
+        try await hint(run: run, hints: hints, activeMs: nil, person: person)
+    }
+
+    public func hint(run: String, hints: Int, activeMs: Int64?, person: String?) async throws -> DailyMovesAnswer {
+        let body = DailyHintBody(hints: hints, activeMs: activeMs)
+        let data = try await authenticated("POST", "/v1/daily/runs/\(Self.path(run))/hint", body: body, query: Self.who(person))
         return try decode(DailyMovesAnswer.self, from: data, status: 200)
     }
 
     public func giveUp(run: String, person: String?) async throws -> DailyMovesAnswer {
-        let data = try await authenticated("POST", "/v1/daily/runs/\(Self.path(run))/giveup", body: nil, query: Self.who(person))
+        try await giveUp(run: run, activeMs: nil, person: person)
+    }
+
+    public func giveUp(run: String, activeMs: Int64?, person: String?) async throws -> DailyMovesAnswer {
+        let body: DailyGiveUpBody? = activeMs.map { DailyGiveUpBody(activeMs: $0) }
+        let data = try await authenticated("POST", "/v1/daily/runs/\(Self.path(run))/giveup", body: body, query: Self.who(person))
         return try decode(DailyMovesAnswer.self, from: data, status: 200)
     }
 
@@ -89,11 +128,16 @@ extension APIClient: DailyService {
 
 // MARK: the clock
 
-/// The run's clock is the server's: from its start to now, plus 30 seconds a hint. No pause.
-/// Counted locally, corrected by how far this device's clock is from the server's at start.
+/// The run's clock (spec §3, "The clock is active time"): the time the puzzle has been on screen
+/// with the app in front, plus the run's `hintMs` a hint. The phone counts it (`DailyActiveTime`)
+/// and sends it with every call; the server keeps it sane. Also the server's 04:00, for the notice
+/// in the day's last minutes.
 public struct DailyClock: Sendable, Hashable {
-    public static let hintPenaltyMs: Int64 = 30_000
-
+    /// What one hint adds, from the start answer.
+    public let hintMs: Int64
+    /// The run's active time at start: the server's, or from a server before active time, its
+    /// clock from the start.
+    public let activeMs: Int64
     /// Epoch ms, the server's.
     public let startedAt: Int64
     /// The server's clock minus this device's, at start.
@@ -104,16 +148,16 @@ public struct DailyClock: Sendable, Hashable {
     public init(start: DailyStart, received: Date = Date()) {
         startedAt = start.startedAt
         closesAt = start.closesAt
+        hintMs = Int64(start.hintMs)
+        activeMs = start.activeMs ?? max(0, start.now - start.startedAt)
         skewMs = start.now - Int64((received.timeIntervalSince1970 * 1000).rounded())
     }
 
     /// The server's epoch ms at a local moment.
     public func serverMs(at date: Date) -> Int64 { Int64((date.timeIntervalSince1970 * 1000).rounded()) + skewMs }
 
-    /// The time the server would count at `date`, with `hints` used: never negative.
-    public func elapsedMs(at date: Date, hints: Int) -> Int64 {
-        max(0, serverMs(at: date) - startedAt) + Int64(hints) * Self.hintPenaltyMs
-    }
+    /// The time to show: `active` milliseconds on screen, with `hints` used.
+    public func shownMs(active: Int64, hints: Int) -> Int64 { max(0, active) + Int64(hints) * hintMs }
 
     /// Milliseconds left before the run closes.
     public func remainingMs(at date: Date) -> Int64 { max(0, closesAt - serverMs(at: date)) }
@@ -125,6 +169,52 @@ public struct DailyClock: Sendable, Hashable {
         let ss = s < 10 ? "0\(s)" : "\(s)"
         if h > 0 { return "\(h):\(m < 10 ? "0\(m)" : "\(m)"):\(ss)" }
         return "\(m):\(ss)"
+    }
+}
+
+/// Active time (docs/daily-protocol.md, "## Active time"): milliseconds counted while running,
+/// paused and resumed by whoever owns the screen. Pure: the moments come from a `DailyTimer` (the
+/// session) or `ContinuousClock` (the host's shown clock), so a test drives it by hand.
+public struct DailyActiveTime: Sendable, Hashable {
+    /// Counted before the current stretch.
+    public private(set) var banked: Int64
+    /// When the current stretch began; nil while paused.
+    public private(set) var since: Duration?
+
+    public init(ms: Int64) {
+        banked = max(0, ms)
+        since = nil
+    }
+
+    public var running: Bool { since != nil }
+
+    /// The total at `now`, in whole milliseconds.
+    public func ms(at now: Duration) -> Int64 {
+        guard let since else { return banked }
+        return banked + max(0, Self.ms(now - since))
+    }
+
+    public mutating func resume(at now: Duration) {
+        guard since == nil else { return }
+        since = now
+    }
+
+    public mutating func pause(at now: Duration) {
+        guard since != nil else { return }
+        banked = ms(at: now)
+        since = nil
+    }
+
+    /// Never less than `floor` (a resync's server value): the larger count stands.
+    public mutating func raise(to floor: Int64, at now: Duration) {
+        let current = ms(at: now)
+        guard floor > current else { return }
+        banked += floor - current
+    }
+
+    private static func ms(_ d: Duration) -> Int64 {
+        let c = d.components
+        return c.seconds * 1000 + c.attoseconds / 1_000_000_000_000_000
     }
 }
 
@@ -212,6 +302,8 @@ public actor DailyRunSession {
     public nonisolated let start: DailyStart
     public nonisolated let clock: DailyClock
     public nonisolated let person: String?
+    /// The rules asked for at start (`DailyGameInfo.rules`), asked again on a resync.
+    public nonisolated let rules: String?
     public nonisolated var game: String { start.game }
 
     public private(set) var seq: Int
@@ -219,6 +311,8 @@ public actor DailyRunSession {
     public private(set) var progress: Double = 0
     public private(set) var result: DailyResult?
     public private(set) var link: DailyLink = .ok
+    /// The run's active time. Paused until the host says the puzzle is on screen (`setActive`).
+    private var active: DailyActiveTime
 
     private let service: any DailyService
     private let window: Duration
@@ -246,28 +340,61 @@ public actor DailyRunSession {
     /// `retry`: the first wait before a failed call is sent again (it doubles, up to 8 seconds).
     /// `timer`: the wall clock, or a test's.
     public init(
-        start: DailyStart, service: any DailyService, person: String?, received: Date = Date(), window: Duration = .seconds(1),
-        retry: Duration = .milliseconds(500), timer: any DailyTimer = DailyWallTimer()
+        start: DailyStart, service: any DailyService, person: String?, rules: String? = nil, received: Date = Date(),
+        window: Duration = .seconds(1), retry: Duration = .milliseconds(500), timer: any DailyTimer = DailyWallTimer()
     ) {
         self.start = start
         self.service = service
         self.person = person
+        self.rules = rules
         self.window = window
         self.retry = retry
         self.timer = timer
         clock = DailyClock(start: start, received: received)
+        active = DailyActiveTime(ms: clock.activeMs)
         seq = start.seq
         hints = start.hints
         result = start.result
         progress = start.result?.progress ?? 0
     }
 
-    /// Starts (or resumes) today's run of `game`. Throws `APIError.notFound` when the server has
-    /// the Dish off or doesn't list the game.
+    /// Starts (or resumes) today's run of `game`, asking for the rules this app plays
+    /// (`DailyGameInfo.rules`; a resumed run keeps the rules it began with). Throws
+    /// `APIError.notFound` when the server has the Dish off or doesn't list the game.
     public static func begin(game: String, service: any DailyService, person: String?) async throws -> DailyRunSession {
-        let start = try await service.start(game: game, person: person)
-        return DailyRunSession(start: start, service: service, person: person)
+        let rules = DailyCatalog.info(game)?.rules
+        let start = try await service.start(game: game, person: person, rules: rules)
+        return DailyRunSession(start: start, service: service, person: person, rules: rules)
     }
+
+    // MARK: active time
+
+    /// The puzzle is on screen with the app in front (true), or not: backgrounded, locked, left for
+    /// Home or a menu, or covered by a sheet. Ended runs don't count. `order` counts the host's
+    /// changes, so one that arrives late (each comes in its own task) never undoes a newer one.
+    public func setActive(_ on: Bool, order: Int = .max) {
+        if order != .max {
+            guard order > lastActiveOrder else { return }
+            lastActiveOrder = order
+        }
+        if on, result == nil {
+            active.resume(at: timer.now())
+        } else if active.running {
+            active.pause(at: timer.now())
+            // Tell the server the time since the last move: what waits goes now and carries it, or
+            // with nothing waiting, an empty batch (docs/daily-protocol.md, "## Active time").
+            guard result == nil, link != .lost else { return }
+            if let last = queue.last { urgentThrough = last.id } else { touch = true }
+            wake()
+        }
+    }
+
+    private var lastActiveOrder = -1
+    /// An empty batch is due: the clock paused with nothing waiting.
+    private var touch = false
+
+    /// The run's active time now, in whole milliseconds: what every call carries.
+    public var activeMs: Int64 { active.ms(at: timer.now()) }
 
     // MARK: listening
 
@@ -375,14 +502,14 @@ public actor DailyRunSession {
 
     /// Returns once nothing is waiting or in flight (`flush` without the push; tests wait on it).
     func settled() async {
-        guard pumping || !queue.isEmpty else { return }
+        guard pumping || !queue.isEmpty || touch else { return }
         await withCheckedContinuation { idle.append($0) }
     }
 
     private func pump() async {
-        while let first = queue.first, result == nil, link != .lost {
+        while !queue.isEmpty || touch, result == nil, link != .lost {
             // Wait for the batch window, unless something waiting is urgent.
-            if urgentThrough == nil {
+            if let first = queue.first, urgentThrough == nil {
                 let due = first.at + window
                 if timer.now() < due {
                     let sleep = Task { [timer] in await timer.wait(until: due) }
@@ -393,9 +520,12 @@ public actor DailyRunSession {
                 }
             }
             let batch = Array(queue.prefix(Self.maxBatch))
-            let from = seq
+            // Any batch carries the time, so an empty one is no longer needed.
+            touch = false
+            // One body, resent as it is after a network failure, so the server answers it once.
+            let body = DailyMovesBody(from: seq, moves: batch.map(\.move), activeMs: activeMs)
             guard let answer = await call({ service, run, person in
-                try await service.moves(run: run, body: DailyMovesBody(from: from, moves: batch.map(\.move)), person: person)
+                try await service.moves(run: run, body: body, person: person)
             }) else { break }
             switch answer {
             case .accepted(let seq, let reveals, let progress, let result):
@@ -404,7 +534,8 @@ public actor DailyRunSession {
                 queue.removeFirst(min(batch.count, queue.count))
                 if let urgent = urgentThrough, !queue.contains(where: { $0.id <= urgent }) { urgentThrough = nil }
                 for move in batch { waiters.removeValue(forKey: move.id)?.resume(returning: reveals) }
-                emit(.accepted(seq: seq, reveals: reveals, progress: progress))
+                // An empty batch only kept the time: nothing for the game to hear.
+                if !batch.isEmpty { emit(.accepted(seq: seq, reveals: reveals, progress: progress)) }
                 if let result { end(result) }
             case .refused(_, _, _):
                 // Illegal, stale, over, a move this app got wrong, or past the game's move budget
@@ -447,6 +578,7 @@ public actor DailyRunSession {
 
     private func dropQueue() {
         queue.removeAll()
+        touch = false
         urgentThrough = nil
         let waiting = waiters
         waiters = [:]
@@ -456,9 +588,10 @@ public actor DailyRunSession {
     /// Starts again (the same run comes back) and hands every game the server's state.
     private func resync() async {
         dropQueue()
-        guard let fresh = await call({ service, _, person in try await service.start(game: self.start.game, person: person) }) else { return }
+        guard let fresh = await call({ service, _, person in try await service.start(game: self.start.game, person: person, rules: self.rules) }) else { return }
         seq = fresh.seq
         hints = fresh.hints
+        if let ms = fresh.activeMs { active.raise(to: ms, at: timer.now()) }
         emit(.resync(fresh))
         if let result = fresh.result { end(result) }
     }
@@ -466,6 +599,7 @@ public actor DailyRunSession {
     private func end(_ result: DailyResult) {
         guard self.result == nil else { return }
         self.result = result
+        active.pause(at: timer.now())
         progress = result.progress
         dropQueue()
         emit(.ended(result))
@@ -485,7 +619,8 @@ public actor DailyRunSession {
     public func hint() async -> DailyJSON? {
         await flush()
         let used = hints
-        guard result == nil, let answer = await call({ service, run, person in try await service.hint(run: run, hints: used, person: person) }) else {
+        let ms = activeMs
+        guard result == nil, let answer = await call({ service, run, person in try await service.hint(run: run, hints: used, activeMs: ms, person: person) }) else {
             return nil
         }
         switch answer {
@@ -507,7 +642,8 @@ public actor DailyRunSession {
     @discardableResult public func giveUp() async -> DailyResult? {
         await flush()
         if let result { return result }
-        guard let answer = await call({ service, run, person in try await service.giveUp(run: run, person: person) }) else { return nil }
+        let ms = activeMs
+        guard let answer = await call({ service, run, person in try await service.giveUp(run: run, activeMs: ms, person: person) }) else { return nil }
         switch answer {
         case .accepted(_, _, _, let result?):
             end(result)

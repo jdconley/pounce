@@ -18,11 +18,13 @@ describe("the Dish's words", () => {
   test("a result in a few words", () => {
     expect(resultWords(base)).toBe("4:05");
     expect(resultWords({ ...base, game: "sniff", guesses: 4 })).toBe("4 of 6");
-    expect(resultWords({ ...base, game: "sniff", outcome: "missed", guesses: 6 })).toBe("Missed");
     expect(resultWords({ ...base, game: "box-fort", outcome: "done", points: 1240 })).toBe("1,240 points");
-    expect(resultWords({ ...base, game: "box-fort", outcome: "gaveUp", points: 1 })).toBe("1 point");
-    expect(resultWords({ ...base, outcome: "gaveUp" })).toBe("Gave up");
-    expect(resultWords({ ...base, outcome: "closed" })).toBe("Unfinished");
+    expect(resultWords({ ...base, game: "box-fort", outcome: "done", points: 1 })).toBe("1 point");
+    // A run that didn't finish: how far it got (spec §6, "Ranking").
+    expect(resultWords({ ...base, game: "sniff", outcome: "missed", guesses: 6, percent: 40 })).toBe("40%");
+    expect(resultWords({ ...base, game: "box-fort", outcome: "gaveUp", points: 1, percent: 12 })).toBe("12%");
+    expect(resultWords({ ...base, outcome: "gaveUp", percent: 0 })).toBe("0%");
+    expect(resultWords({ ...base, outcome: "closed", progress: 0.629 })).toBe("62%");
   });
 
   test("share text gives nothing away", () => {

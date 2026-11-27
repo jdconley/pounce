@@ -89,8 +89,40 @@ enum DailyFixtures {
         let theirs = try DailyFixtures.decode(DailyJSON.self, "client", "moves")
         #expect(ours == theirs)
         // The hint's body: the hints used so far, as the session sends it.
-        let hint = try JSONDecoder().decode(DailyJSON.self, from: JSONEncoder().encode(["hints": 0]))
+        let hint = try JSONDecoder().decode(DailyJSON.self, from: JSONEncoder().encode(DailyHintBody(hints: 0)))
         #expect(hint == (try DailyFixtures.decode(DailyJSON.self, "client", "hint")))
+        // With active time: every moves batch, hint and give-up carries it.
+        func json(_ value: some Encodable) throws -> DailyJSON { try JSONDecoder().decode(DailyJSON.self, from: JSONEncoder().encode(value)) }
+        let active = DailyMovesBody(from: 0, moves: body.moves, activeMs: 18_250)
+        #expect(try json(active) == (try DailyFixtures.decode(DailyJSON.self, "client", "movesActive")))
+        #expect(try json(DailyHintBody(hints: 0, activeMs: 31_000)) == (try DailyFixtures.decode(DailyJSON.self, "client", "hintActive")))
+        #expect(try json(DailyGiveUpBody(activeMs: 95_500)) == (try DailyFixtures.decode(DailyJSON.self, "client", "giveUpActive")))
+        #expect(try json(["rules": DailyCatalog.nineLives.rules]) == (try DailyFixtures.decode(DailyJSON.self, "client", "startLives")))
+    }
+
+    @Test func activeTimeAndPercentDecode() throws {
+        #expect(try DailyFixtures.decode(DailyStart.self, "http", "start").activeMs == 0)
+        #expect(try DailyFixtures.decode(DailyStart.self, "http", "resumed").activeMs == 25_000)
+        guard case .accepted(_, _, _, let solved?) = try DailyFixtures.decode(DailyMovesAnswer.self, "http", "movesSolved") else {
+            Issue.record("no result")
+            return
+        }
+        #expect(solved.percent == 100)
+        let gaveUp = try DailyFixtures.decode(DailyMovesAnswer.self, "http", "gaveUp")
+        guard case .accepted(_, _, _, let quit?) = gaveUp else { Issue.record("no result"); return }
+        #expect(quit.percent == 25 && DailyCatalog.test.summary(quit) == "25%")
+        // A result stored before percent: floor(progress * 100).
+        let old = try JSONDecoder().decode(
+            DailyResult.self,
+            from: Data(#"{"game":"nine-lives","date":"d","number":1,"outcome":"missed","timeMs":1,"hints":0,"progress":0.629,"tooFast":false}"#.utf8))
+        #expect(old.percent == nil && old.shownPercent == 62)
+        let odd = try JSONDecoder().decode(
+            DailyResult.self,
+            from: Data(#"{"game":"nine-lives","date":"d","number":1,"outcome":"missed","timeMs":1,"progress":0.5,"percent":"lots"}"#.utf8))
+        #expect(odd.shownPercent == 50 && odd.hints == 0)
+        // And back again, as the store keeps it.
+        let back = try JSONDecoder().decode(DailyResult.self, from: JSONEncoder().encode(quit))
+        #expect(back == quit)
     }
 
     @Test func aResultForAnotherDateLeavesTheBoard() throws {
@@ -125,10 +157,50 @@ enum DailyFixtures {
             DailyResult(game: "x", date: "d", number: n, outcome: outcome, timeMs: ms, progress: 1, guesses: guesses, points: points)
         }
         #expect(DailyCatalog.sniff.line(r(.solved, guesses: 4)) == "Sniff 12: 4 of 6")
-        #expect(DailyCatalog.sniff.line(r(.missed, guesses: 6)) == "Sniff 12: X of 6")
+        #expect(DailyCatalog.sniff.line(r(.missed, guesses: 6)) == "Sniff 12: X of 6, 100%")
         #expect(DailyCatalog.nineLives.line(r(.solved)) == "Nine Lives 12: 4:07")
-        #expect(DailyCatalog.catNap.line(r(.gaveUp)) == "Cat Nap 12: Gave up")
+        #expect(DailyCatalog.catNap.line(r(.gaveUp)) == "Cat Nap 12: Gave up, 100%")
         #expect(DailyCatalog.boxFort.line(r(.done, points: 1240)) == "Box Fort 12: 1,240 points")
         #expect(DailyCatalog.sniff.short(r(.solved, guesses: 3)) == "3/6")
+        // A run that didn't finish says how far it got (spec §6, "Ranking"); the share line also
+        // says how it ended: Nine Lives' third wrong number is "Out of lives".
+        func unfinished(_ outcome: DailyOutcome, percent: Int?, progress: Double = 0.4) -> DailyResult {
+            DailyResult(game: "x", date: "d", number: 12, outcome: outcome, timeMs: 1, progress: progress, percent: percent)
+        }
+        #expect(DailyCatalog.nineLives.line(unfinished(.missed, percent: 62)) == "Nine Lives 12: Out of lives, 62%")
+        #expect(DailyCatalog.nineLives.short(unfinished(.missed, percent: 62)) == "62%")
+        #expect(DailyCatalog.nineLives.summary(unfinished(.closed, percent: nil, progress: 0.629)) == "62%")
+        #expect(DailyCatalog.sniff.short(unfinished(.missed, percent: 40)) == "40%")
+        #expect(DailyCatalog.sniff.ending(unfinished(.missed, percent: 40)) == "X of 6")
+        #expect(DailyCatalog.boxFort.summary(unfinished(.gaveUp, percent: 30)) == "30%")
+        #expect(DailyCatalog.catNap.ending(unfinished(.closed, percent: 0)) == "Out of time")
+        #expect(DailyCatalog.nineLives.ending(r(.solved)) == nil)
+        #expect(DailyCatalog.nineLives.spoken(unfinished(.missed, percent: 62)) == "Out of lives, 62%")
+        #expect(DailyCatalog.nineLives.spoken(r(.solved)) == "4:07")
+        #expect(DailyCatalog.nineLives.rules == "lives" && DailyCatalog.sniff.rules == nil)
+    }
+
+    @Test func startReadsHintMsLeniently() throws {
+        func start(_ extra: String) throws -> DailyStart {
+            let json = """
+                {"run":"r","game":"nine-lives","date":"2026-11-23","number":1,"level":1,"startedAt":1,"now":1,
+                 "puzzle":{},"state":{},"seq":0,"hints":0,"result":null,"closesAt":2\(extra)}
+                """
+            return try JSONDecoder().decode(DailyStart.self, from: Data(json.utf8))
+        }
+        // A server before the field: 30 seconds a hint.
+        #expect(try start("").hintMs == 30_000)
+        #expect(try start(#","hintMs":0"#).hintMs == 0)
+        #expect(try start(#","hintMs":30000"#).hintMs == 30_000)
+        #expect(try start(#","hintMs":"soon""#).hintMs == 30_000)
+        #expect(try start(#","hintMs":-5"#).hintMs == 0)
+    }
+
+    @Test func startAsksForRulesInItsBody() throws {
+        // The body the client sends: `{ "rules": "lives" }`, or none.
+        let body: [String: String]? = DailyCatalog.nineLives.rules.map { ["rules": $0] }
+        let encoder = JSONEncoder()
+        #expect(String(data: try encoder.encode(body), encoding: .utf8) == #"{"rules":"lives"}"#)
+        #expect(DailyCatalog.boxFort.rules == nil)
     }
 }

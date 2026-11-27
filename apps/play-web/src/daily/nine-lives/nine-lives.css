@@ -53,18 +53,32 @@
   margin-top: 16px;
 }
 
+/* Three across the board's width at any text size: the words never outgrow their third. */
 .nl-tools .btn {
   flex: 1;
   min-width: 0;
   padding-inline: 8px;
+  font-size: min(clamp(1.15rem, 4.6vw, 1.45rem), var(--nl-w) / 15);
 }
 
 /* Tablets and laptops: full-size buttons beside a big quilt. */
 @container (min-width: 600px) {
   .nl-tools .btn.small {
     min-height: 58px;
-    font-size: 1.4rem;
+    font-size: min(1.4rem, var(--nl-w) / 15);
     box-shadow: 0 6px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, 0.45);
+  }
+
+  .nl-has-lives .nl-lives {
+    --nl-life: 46px;
+  }
+
+  .nl-tools .nl-hints-left {
+    top: -12px;
+    right: -4px;
+    min-width: 34px;
+    height: 34px;
+    font-size: 20px;
   }
 }
 
@@ -82,8 +96,13 @@
     width: min(340px, 100cqw - min(100cqh - 40px, 60cqw) - 76px);
   }
 
-  .nl-not-quite-slot {
+  .nl-status {
     order: -1;
+    height: 64px;
+  }
+
+  .nl-has-lives .nl-lives {
+    --nl-life: 58px;
   }
 
   .nl-keys {
@@ -243,6 +262,23 @@ span.nl-cell {
   fill: color-mix(in srgb, var(--refuse) 55%, var(--ink));
 }
 
+.nl-pending .nl-lip {
+  fill: color-mix(in srgb, #4a3089 55%, var(--ink));
+}
+
+/* Checking with the server: a quiet pulse, only if the answer is slow to come. */
+.nl-tile.nl-pending {
+  animation: nl-checking 800ms ease-in-out 350ms infinite alternate;
+}
+
+@keyframes nl-checking {
+  to { opacity: 0.55; }
+}
+
+.nl-answer .nl-lip {
+  fill: color-mix(in srgb, #c9b3ff 55%, var(--ink));
+}
+
 .nl-digit {
   position: absolute;
   inset: 24% 0 0;
@@ -257,6 +293,12 @@ span.nl-cell {
 .nl-given .nl-digit,
 .nl-hinted .nl-digit {
   color: var(--ink);
+  text-shadow: none;
+}
+
+/* The solution filled in, out of lives: soft lilac, a violet digit, so it reads as shown, not won. */
+.nl-answer .nl-digit {
+  color: var(--violet);
   text-shadow: none;
 }
 
@@ -278,11 +320,117 @@ span.nl-cell {
   pointer-events: none;
 }
 
-/* "Not quite": its own room, so nothing moves when it shows. */
-.nl-not-quite-slot {
+/* The status row: the lives, and in the same room the board's one line ("Out of lives", or "Not
+   quite" on the first rules), so nothing moves when it shows. The line crossfades over the lives. */
+.nl-status {
   display: grid;
   place-items: center;
   height: 50px;
+}
+
+.nl-status > * {
+  grid-area: 1 / 1;
+}
+
+.nl-lives {
+  --nl-life: 36px;
+  display: flex;
+  gap: calc(var(--nl-life) * 0.22);
+  transition: opacity 200ms var(--ease-out);
+}
+
+.nl-saying .nl-lives {
+  opacity: 0;
+}
+
+.nl-life {
+  position: relative;
+  display: block;
+  width: var(--nl-life);
+  height: calc(var(--nl-life) * 40 / 42);
+}
+
+.nl-cat,
+.nl-life-pop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.nl-cat-rim {
+  fill: var(--ink);
+  stroke: var(--ink);
+  stroke-width: 5;
+  stroke-linejoin: round;
+  transform: translateY(2.5px);
+}
+
+.nl-cat-eyes {
+  fill: var(--ink);
+}
+
+/* A lost life: the head's ghost, where it was. */
+.nl-lost .nl-cat-rim {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.42);
+  stroke-width: 2.5;
+  stroke-dasharray: 4 3.4;
+  transform: none;
+}
+
+.nl-lost .nl-cat-face {
+  fill: rgba(27, 11, 58, 0.45);
+}
+
+/* The life that just went: the full head jumps up and away, once. */
+.nl-life-pop {
+  animation: nl-life-pop 700ms var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+.nl-life-pop > .nl-life {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes nl-life-pop {
+  0% { opacity: 1; transform: none; }
+  30% { opacity: 1; transform: translateY(-35%) scale(1.25) rotate(-8deg); }
+  100% { opacity: 0; transform: translateY(-120%) scale(0.6) rotate(18deg); }
+}
+
+/* Hints left, on the Hint button: a badge on its corner. Spent: the button and badge rest. */
+.btn.nl-hint {
+  position: relative;
+  overflow: visible;
+}
+
+.nl-hints-left {
+  position: absolute;
+  top: -9px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 5px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--yellow);
+  font: 900 15px/1 var(--round);
+  color: var(--ink);
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+}
+
+.btn.nl-spent {
+  opacity: 0.45;
+}
+
+.btn.nl-spent .nl-hints-left {
+  background: var(--white);
 }
 
 .nl-not-quite {
@@ -377,6 +525,67 @@ span.nl-cell {
   margin-bottom: calc(var(--nl-q) * 0.014);
 }
 
+.nl-watch-in {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* A run on the lives rules: its lives and hints left, sized for across a room. A tall or square
+   box puts them in a row under the quilt; a wide one (a TV's stage) in a column beside it, the
+   quilt still centred and as tall as the box. `--nl-s` is a hundredth of the box's shorter side. */
+.nl-watch-lives .nl-watch-in {
+  --nl-s: min(1cqw, 1cqh);
+  --nl-q: min(100cqw, (100cqh - var(--nl-s) * 16) / 1.014);
+  grid-template-rows: auto auto;
+  align-content: center;
+  row-gap: calc(var(--nl-s) * 3);
+}
+
+/* The quilt's size is the box's (above), so the grid's columns can use it too. */
+.nl-watch-lives .nl-watch-quilt {
+  --nl-q: inherit;
+}
+
+.nl-watch-panel {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--nl-s) * 4);
+}
+
+.nl-watch-panel .nl-lives {
+  --nl-life: calc(var(--nl-s) * 10);
+}
+
+.nl-watch-line {
+  margin: 0;
+  font: 900 calc(var(--nl-s) * 5.5) / 1.1 var(--round);
+  color: var(--white);
+  white-space: nowrap;
+}
+
+@container (min-aspect-ratio: 185 / 100) {
+  .nl-watch-lives .nl-watch-in {
+    --nl-q: min(100cqh / 1.014, 100cqw - var(--nl-s) * 86);
+    grid-template-columns: 1fr var(--nl-q) 1fr;
+    grid-template-rows: none;
+  }
+
+  .nl-watch-lives .nl-watch-quilt {
+    grid-column: 2;
+  }
+
+  .nl-watch-panel {
+    grid-column: 3;
+    justify-self: start;
+    flex-direction: column;
+    align-items: flex-start;
+    width: calc(var(--nl-s) * 38);
+    margin-left: calc(var(--nl-s) * 5);
+  }
+}
+
 /* Motion. */
 .nl-pop {
   animation: nl-pop 450ms var(--ease-spring);
@@ -388,6 +597,16 @@ span.nl-cell {
 
 .nl-solved .nl-tile-wrap {
   animation: nl-wave 520ms var(--ease-spring) var(--nl-wave) both;
+}
+
+/* Out of lives: the answers come in, a wave across the quilt. */
+.nl-fill {
+  animation: nl-fill 460ms var(--ease-spring) var(--nl-wave) both;
+}
+
+@keyframes nl-fill {
+  0% { opacity: 0; transform: scale(0.4); }
+  100% { opacity: 1; transform: none; }
 }
 
 @keyframes nl-pop {
@@ -423,7 +642,14 @@ span.nl-cell {
   .nl-pop,
   .nl-wiggle,
   .nl-solved .nl-tile-wrap,
+  .nl-fill,
+  .nl-life-pop,
+  .nl-tile.nl-pending,
   .nl-not-quite.nl-show {
     animation: none;
+  }
+
+  .nl-life-pop {
+    opacity: 0;
   }
 }

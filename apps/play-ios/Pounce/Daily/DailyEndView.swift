@@ -34,10 +34,11 @@ struct DailyEndView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: roomy ? 24 : 18) {
-                DailyTreat(game: game, side: roomy ? 110 : 84, done: result.outcome.finished)
+                DailyTreat(game: game, side: roomy ? 110 : 84, done: result.outcome.finished, ended: true)
                     .padding(.top, 12)
                 OutlinedText(headline, size: roomy ? 44 : 34, fill: result.outcome.finished ? Palette.lime : .white, width: 4)
                     .accessibilityIdentifier("daily.end.headline")
+                // The time, guesses or points; for a run that didn't finish, how far it got ("62%").
                 OutlinedText(game.summary(result), size: roomy ? 64 : 50, fill: Palette.yellow, width: 5)
                     .accessibilityIdentifier("daily.end.result")
                 if let detail = share.detail {
@@ -63,7 +64,10 @@ struct DailyEndView: View {
         switch result.outcome {
         case .solved: String(localized: "Solved", comment: "Daily end: the puzzle was solved")
         case .done: String(localized: "Fort done", comment: "Daily end: Box Fort's run ended")
-        case .missed: String(localized: "Missed", comment: "Daily end: Sniff's six guesses ran out")
+        case .missed:
+            game.id == DailyCatalog.nineLives.id
+                ? String(localized: "Out of lives", comment: "Daily end: Nine Lives' third wrong number")
+                : String(localized: "Missed", comment: "Daily end: Sniff's six guesses ran out")
         case .gaveUp: String(localized: "Gave up", comment: "Daily end: the player gave up")
         case .closed: String(localized: "Out of time", comment: "Daily end: the day ended first")
         case .other: String(localized: "Done", comment: "Daily end: an outcome this app doesn't know")
@@ -176,7 +180,7 @@ struct DailyEndView: View {
         let result = result
         let marks = marks
         let made: (Data, UIImage)? = await Task.detached {
-            let state = try? await service.start(game: game.id, person: person).state
+            let state = try? await service.start(game: game.id, person: person, rules: game.rules).state
             let grid = state.flatMap(marks)
             guard let png = await DailyShare(game: game, result: result, marks: grid).png(),
                   let image = await UIImage(data: png)?.byPreparingForDisplay() else { return nil }

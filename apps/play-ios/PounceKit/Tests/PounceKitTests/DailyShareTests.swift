@@ -28,6 +28,11 @@ import Testing
         let share = DailyShare(game: DailyCatalog.nineLives, result: result(.solved, hints: 1), marks: nil)
         #expect(share.text.hasPrefix("Nine Lives 12: 4:07\n"))
         #expect(share.detail == "1 hint")
+        // Out of lives says so, and nothing of the puzzle.
+        let missed = DailyResult(game: "nine-lives", date: "2026-11-23", number: 12, outcome: .missed, timeMs: 247_000, hints: 3, progress: 0.62, percent: 62)
+        let out = DailyShare(game: DailyCatalog.nineLives, result: missed, marks: nil)
+        #expect(out.text.hasPrefix("Nine Lives 12: Out of lives, 62%\n"))
+        #expect(out.detail == "3 hints")
     }
 
     @Test func pngRenders() async throws {

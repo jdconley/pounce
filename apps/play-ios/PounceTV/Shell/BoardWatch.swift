@@ -186,11 +186,10 @@ private struct EndedView: View {
                     .scaledToFit()
                     .frame(width: 260, height: 260)
                 OutlinedText(title, size: 140, width: 10)
-                if ended.result.finished {
-                    Text(TVBoardState.resultWords(ended.result))
-                        .font(.system(size: 96, weight: .black, design: .rounded))
-                        .foregroundStyle(Palette.yellow)
-                }
+                // The time, guesses or points; or how far the run got ("62%").
+                Text(TVBoardState.resultWords(ended.result))
+                    .font(.system(size: 96, weight: .black, design: .rounded))
+                    .foregroundStyle(Palette.yellow)
             }
         }
         .compositingGroup()
@@ -202,7 +201,10 @@ private struct EndedView: View {
         switch ended.result.outcome {
         case .solved: String(localized: "Solved", comment: "TV: a watched run, solved")
         case .done: String(localized: "Done", comment: "TV: a watched Box Fort run, ended")
-        case .missed: String(localized: "Missed", comment: "TV: a watched Sniff run, out of guesses")
+        case .missed:
+            ended.result.game == DailyCatalog.nineLives.id
+                ? String(localized: "Out of lives", comment: "TV: a watched Nine Lives run, out of lives")
+                : String(localized: "Missed", comment: "TV: a watched Sniff run, out of guesses")
         case .gaveUp: String(localized: "Gave up", comment: "TV: a watched run, given up")
         case .closed, .other: String(localized: "Closed", comment: "TV: a watched run, closed at the day's end")
         }

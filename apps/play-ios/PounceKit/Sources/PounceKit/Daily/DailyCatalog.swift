@@ -22,20 +22,37 @@ public struct DailyGameInfo: Sendable, Hashable, Identifiable {
     public let tries: Int?
     /// The game's color on the Dish and its share card, from Pounce's palette (0xRRGGBB).
     public let tint: UInt32
+    /// The rules this app plays, asked for at start (`{ "rules": ... }`): Nine Lives' `"lives"`.
+    /// Nil: the game has one set of rules, and the start has no body.
+    public let rules: String?
+    /// What a `missed` run is called: "Missed", or Nine Lives' "Out of lives" (Sniff says "X of 6").
+    public let missed: String
 
-    public init(id: String, title: String, scoring: DailyScoring, hints: Bool, tries: Int? = nil, tint: UInt32) {
+    public init(
+        id: String, title: String, scoring: DailyScoring, hints: Bool, tries: Int? = nil, tint: UInt32, rules: String? = nil,
+        missed: String = "Missed"
+    ) {
         self.id = id
         self.title = title
         self.scoring = scoring
         self.hints = hints
         self.tries = tries
         self.tint = tint
+        self.rules = rules
+        self.missed = missed
     }
 
-    /// "Sniff 12: 4 of 6", "Nine Lives 12: 4:07", "Box Fort 12: 1,240 points", "Cat Nap 12: Missed".
-    /// The share text: the number and the result, nothing that spoils the puzzle.
+    /// "Sniff 12: 4 of 6", "Nine Lives 12: 4:07", "Box Fort 12: 1,240 points", "Nine Lives 12: Out
+    /// of lives, 62%". The share text: the number and the result, nothing that spoils the puzzle.
     public func line(_ result: DailyResult) -> String {
-        "\(name(number: result.number)): \(summary(result))"
+        "\(name(number: result.number)): \(spoken(result))"
+    }
+
+    /// The result in full: the summary, after how it ended for a run that didn't finish. "4:07",
+    /// "Out of lives, 62%". For VoiceOver and the share text.
+    public func spoken(_ result: DailyResult) -> String {
+        guard let words = ending(result) else { return summary(result) }
+        return "\(words), \(summary(result))"
     }
 
     /// "Sniff 12", or just "Sniff" for a number below 1 (a server before launch day sets
@@ -44,34 +61,37 @@ public struct DailyGameInfo: Sendable, Hashable, Identifiable {
         number >= 1 ? "\(title) \(number)" : title
     }
 
-    /// The result alone: "4 of 6", "4:07", "1,240 points", "Gave up".
-    public func summary(_ result: DailyResult) -> String {
-        switch (scoring, result.outcome) {
-        case (.points, _):
-            return "\((result.points ?? 0).formatted(.number)) points"
-        case (.guesses, .solved):
-            return "\(result.guesses ?? 0) of \(tries ?? 6)"
-        case (.guesses, .missed):
-            return "X of \(tries ?? 6)"
-        case (_, .solved):
-            return DailyClock.format(ms: Int64(result.timeMs))
-        case (_, .gaveUp):
-            return "Gave up"
-        case (_, .closed):
-            return "Out of time"
-        default:
-            return "Missed"
+    /// How a run that didn't finish ended: "Out of lives", "X of 6" (Sniff), "Gave up", "Out of
+    /// time". Nil for a finished run (solved, or Box Fort's ending).
+    public func ending(_ result: DailyResult) -> String? {
+        switch result.outcome {
+        case .solved, .done: nil
+        case .missed: scoring == .guesses ? "X of \(tries ?? 6)" : missed
+        case .gaveUp: "Gave up"
+        case .closed: "Out of time"
+        case .other: "Done"
         }
     }
 
-    /// The result in a few characters, for a treat on Home or a board row: "4/6", "4:07", "1,240".
+    /// The result alone: "4 of 6", "4:07", "1,240 points", or for a run that didn't finish how far
+    /// it got, "62%" (spec §6, "Ranking").
+    public func summary(_ result: DailyResult) -> String {
+        if !result.outcome.finished { return "\(result.shownPercent)%" }
+        switch (scoring, result.outcome) {
+        case (.points, _): return "\((result.points ?? 0).formatted(.number)) points"
+        case (.guesses, _): return "\(result.guesses ?? 0) of \(tries ?? 6)"
+        default: return DailyClock.format(ms: Int64(result.timeMs))
+        }
+    }
+
+    /// The result in a few characters, for a treat on Home or a board row: "4/6", "4:07", "1,240",
+    /// "62%".
     public func short(_ result: DailyResult) -> String {
+        if !result.outcome.finished { return "\(result.shownPercent)%" }
         switch (scoring, result.outcome) {
         case (.points, _): return (result.points ?? 0).formatted(.number)
-        case (.guesses, .solved): return "\(result.guesses ?? 0)/\(tries ?? 6)"
-        case (.guesses, .missed): return "X/\(tries ?? 6)"
-        case (_, .solved): return DailyClock.format(ms: Int64(result.timeMs))
-        default: return "Missed"
+        case (.guesses, _): return "\(result.guesses ?? 0)/\(tries ?? 6)"
+        default: return DailyClock.format(ms: Int64(result.timeMs))
         }
     }
 }
@@ -81,7 +101,7 @@ public struct DailyGameInfo: Sendable, Hashable, Identifiable {
 /// one line per game) and the server lists it.
 public enum DailyCatalog {
     public static let sniff = DailyGameInfo(id: "sniff", title: "Sniff", scoring: .guesses, hints: false, tries: 6, tint: 0xFF2E9A)
-    public static let nineLives = DailyGameInfo(id: "nine-lives", title: "Nine Lives", scoring: .time, hints: true, tint: 0x2EB8FF)
+    public static let nineLives = DailyGameInfo(id: "nine-lives", title: "Nine Lives", scoring: .time, hints: true, tint: 0x2EB8FF, rules: "lives", missed: "Out of lives")
     public static let catNap = DailyGameInfo(id: "cat-nap", title: "Cat Nap", scoring: .time, hints: true, tint: 0x00D1C1)
     public static let boxFort = DailyGameInfo(id: "box-fort", title: "Box Fort", scoring: .points, hints: false, tint: 0xFF8A00)
     /// The server's test game (`DAILY_TEST=on`): count to 3 + level. Debug builds only play it.

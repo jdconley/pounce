@@ -49,6 +49,10 @@ function Clock(props: { run: Run }) {
 
 const OUTCOME: Record<string, string> = { solved: "Solved", missed: "Missed", gaveUp: "Gave up", closed: "Time's up", done: "Fort done" };
 
+/** The end's heading: Nine Lives' miss is "Out of lives". */
+export const endTitle = (r: Pick<DailyResult, "game" | "outcome">): string =>
+  r.game === "nine-lives" && r.outcome === "missed" ? "Out of lives" : (OUTCOME[r.outcome] ?? "Done");
+
 function EndPanel(props: {
   game: DailyGameId;
   result: DailyResult;
@@ -62,14 +66,17 @@ function EndPanel(props: {
 }) {
   const { result } = props;
   const look = lookOf(props.game);
+  const title = endTitle(result);
+  const words = resultWords(result);
   return (
     <div class="dd-end-scrim">
       <section class={`dd-end ${result.outcome}`} aria-labelledby="end-h" style={{ "--c": look.color, "--d": look.deep }}>
         <Treat game={props.game} size={84} />
         <h2 class="outlined" id="end-h">
-          {OUTCOME[result.outcome] ?? "Done"}
+          {title}
         </h2>
-        <p class="dd-end-result outlined">{resultWords(result)}</p>
+        {/* "Gave up" under "Gave up" says nothing twice. */}
+        {words === title ? null : <p class="dd-end-result outlined">{words}</p>}
         <p class="dd-end-place">
           {result.tooFast ? "Too fast for the board" : props.rank ? `${placeWords(props.rank, props.of)} today` : "On today's board"}
           {result.hints > 0 ? ` · ${result.hints === 1 ? "1 hint" : `${result.hints} hints`}` : ""}
@@ -105,12 +112,19 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
   const [mod, setMod] = useState<AnyGame | null>(null);
   const [run, setRun] = useState<Run | null>(null);
   const [result, setResult] = useState<DailyResult | null>(null);
+  // How long the end waits before it comes over the board, when the run ends while it's played:
+  // the game's moment (Nine Lives filling in the solution). The wait is the end's own CSS delay.
+  const [endWait, setEndWait] = useState(0);
+  // A batch waits on a dropped connection: say so, so nothing looks taken that the server hasn't.
+  const [retrying, setRetrying] = useState(false);
   const [quitting, setQuitting] = useState(false);
   const [tvOn, setTvOn] = useState(false);
   const [stats, setStats] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [late, setLate] = useState(false);
   const working = useRef(false);
+  const modRef = useRef<AnyGame | null>(null);
+  modRef.current = mod;
   const look = lookOf(game);
 
   useEffect(() => {
@@ -139,7 +153,9 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
   useEffect(() => {
     if (!run) return;
     const off = run.subscribe((e) => {
+      if (e.kind === "link") setRetrying(e.status === "retrying");
       if (e.kind !== "result") return;
+      setEndWait(modRef.current?.endDelayMs?.(e.result) ?? 0);
       setResult(e.result);
       setQuitting(false);
       play(e.result.outcome === "solved" || e.result.outcome === "done" ? "fanfare" : "flip", 0.7);
@@ -148,10 +164,15 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
     });
     return () => {
       off();
-      // Whatever the game queued goes before the screen does.
+      // Whatever the game queued goes before the screen does; the clock stops with it.
       void run.flush();
+      run.close();
     };
   }, [run]);
+
+  // Active time counts only while the puzzle is on screen: not under Give up's sheet, not after
+  // the end (the Run also pauses for a hidden tab).
+  useEffect(() => run?.setShown(!quitting && !result), [run, quitting, result]);
 
   const giveUp = async () => {
     if (!run || working.current) return;
@@ -186,6 +207,7 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
       if (mod.share) {
         const fresh = await startRun(game, person).catch(() => null);
         grid = fresh ? mod.share(fresh.start.state, result) : null;
+        fresh?.close();
       }
       const png = await renderCard({ title: look.title, number: result.number, words: resultWords(result), hints: result.hints, color: look.color, deep: look.deep, grid });
       const out = await shareResult(look.title, result, png);
@@ -204,7 +226,7 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
   const Screen = mod?.Screen;
 
   return (
-    <main class="screen dd-play" style={{ "--c": look.color, "--d": look.deep }}>
+    <main class="screen dd-play" style={{ "--c": look.color, "--d": look.deep, "--dd-end-wait": `${endWait}ms` }}>
       <header class="dd-play-head">
         <div class="dd-play-bar">
           <IconButton icon="icon-back" label="Dish" onClick={() => navigate({ kind: "dish" })} />
@@ -227,6 +249,10 @@ export function PuzzleHost(props: { game: DailyGameId; say: (words: string) => v
             ) : null}
           </div>
         </div>
+        {/* Floats under the bar, over the stage, so the board never moves for it. */}
+        <p class={`dd-retrying${retrying && !result ? " on" : ""}`} role="status">
+          {retrying && !result ? "Reconnecting" : ""}
+        </p>
       </header>
       {late ? (
         <p class="dd-late" role="status">

@@ -127,8 +127,9 @@ describe("Nine Lives in the Dish (web)", () => {
   test("a hint fills the cell the server names, and locks it", async () => {
     const fake = fakeSession();
     mount({ session: fake.session, playing: true });
-    const hint = [...root!.querySelectorAll("button")].find((b) => b.textContent === "Hint")!;
+    const hint = [...root!.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Hint")!;
     await act(async () => hint.click());
+    await act(async () => {});
     expect(cell(open[0]!).getAttribute("aria-label")).toContain("hint");
   });
 
@@ -144,7 +145,8 @@ describe("Nine Lives in the Dish (web)", () => {
   test("unmounting stops listening", () => {
     const fake = fakeSession();
     mount({ session: fake.session, playing: true });
-    expect(fake.listeners.size).toBe(1);
+    // Resyncs, and what moves reveal.
+    expect(fake.listeners.size).toBe(2);
     act(() => render(null, root!));
     expect(fake.listeners.size).toBe(0);
   });

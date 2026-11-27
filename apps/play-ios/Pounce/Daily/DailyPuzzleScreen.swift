@@ -1,5 +1,6 @@
 import PounceKit
 import SwiftUI
+import UIKit
 
 /// One daily puzzle (daily games design §7, "A puzzle screen"): the host around a game's board.
 ///
@@ -13,6 +14,7 @@ struct DailyPuzzleScreen: View {
 
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
 
     private enum Phase {
         case loading
@@ -25,7 +27,17 @@ struct DailyPuzzleScreen: View {
     @State private var hints = 0
     @State private var link: DailyLink = .ok
     @State private var result: DailyResult?
+    /// The run has ended and the board is having its last word (`DailyGameView.endHold`): the
+    /// clock stops and give up goes, then the end screen.
+    @State private var ending: DailyResult?
     @State private var onTV = false
+    /// The run's active time as the shown clock counts it, kept in step with the session's: both
+    /// pause and resume on the same changes (`syncActive`).
+    @State private var active = DailyActiveTime(ms: 0)
+    @State private var activeOrigin = ContinuousClock.now
+    @State private var activeOrder = 0
+    /// The screen is up (not left for Home or a menu).
+    @State private var shown = false
     @State private var askGiveUp = false
     @State private var givingUp = false
     @State private var attempt = 0
@@ -52,6 +64,17 @@ struct DailyPuzzleScreen: View {
             .animation(.spring(duration: 0.4, bounce: 0.3).paced, value: result)
             .animation(.easeOut(duration: 0.2).paced, value: link)
             .frameGate()
+            .tipHost(.daily)
+            .onAppear {
+                shown = true
+                syncActive()
+            }
+            .onDisappear {
+                shown = false
+                syncActive()
+            }
+            .onChange(of: scenePhase) { _, _ in syncActive() }
+            .onChange(of: askGiveUp) { _, _ in syncActive() }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("screen-daily")
     }
@@ -83,7 +106,11 @@ struct DailyPuzzleScreen: View {
                     playable.make(session)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .onDisappear { Task { await session.flush() } }
+                .onDisappear {
+                    // Off screen: the clock stops first, so what waits goes with its last active time.
+                    syncActive(onScreen: false)
+                    Task { await session.flush() }
+                }
             }
         }
     }
@@ -152,7 +179,7 @@ struct DailyPuzzleScreen: View {
             .accessibilityElement(children: .combine)
             Spacer(minLength: 4)
             clock
-            if case .playing(let session, _) = phase, result == nil {
+            if case .playing(let session, _) = phase, result == nil, ending == nil {
                 if model.daily.tvs > 0 { tvSwitch(session) }
                 giveUpButton
             }
@@ -168,11 +195,11 @@ struct DailyPuzzleScreen: View {
     @ViewBuilder private var clock: some View {
         if case .playing(let session, _) = phase {
             Group {
-                if let result {
-                    clockText(DailyClock.format(ms: Int64(result.timeMs)))
+                if let done = result ?? ending {
+                    clockText(DailyClock.format(ms: Int64(done.timeMs)))
                 } else {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        clockText(DailyClock.format(ms: session.clock.elapsedMs(at: context.date, hints: hints)))
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        clockText(DailyClock.format(ms: session.clock.shownMs(active: active.ms(at: activeNow()), hints: hints)))
                     }
                 }
             }
@@ -251,12 +278,16 @@ struct DailyPuzzleScreen: View {
             let playable = try await DailyHost.prepare(type, session)
             hints = session.start.hints
             result = session.start.result
+            active = DailyActiveTime(ms: session.clock.activeMs)
             phase = .playing(session, playable)
+            syncActive()
             for await event in await session.events() {
                 switch event {
                 case .hinted(_, let count, _): hints = count
-                case .resync(let start): hints = start.hints
-                case .ended(let ended): finish(ended)
+                case .resync(let start):
+                    hints = start.hints
+                    if let ms = start.activeMs { active.raise(to: ms, at: activeNow()) }
+                case .ended(let ended): await finish(ended, hold: playable.hold(ended))
                 case .link(let next): link = next
                 case .accepted: break
                 }
@@ -269,9 +300,17 @@ struct DailyPuzzleScreen: View {
         }
     }
 
-    private func finish(_ ended: DailyResult) {
-        guard result == nil else { return }
+    private func finish(_ ended: DailyResult, hold: Duration) async {
+        guard result == nil, ending == nil else { return }
+        // The run is over: its clock stops at the server's time.
+        defer { syncActive() }
+        if hold > .zero {
+            ending = ended
+            syncActive()
+            try? await Task.sleep(for: Pace.duration(hold))
+        }
         result = ended
+        ending = nil
         onTV = false
         model.daily.record(ended)
         if ended.outcome.finished {
@@ -284,6 +323,30 @@ struct DailyPuzzleScreen: View {
         }
     }
 
+    // MARK: active time
+
+    private func activeNow() -> Duration { activeOrigin.duration(to: .now) }
+
+    /// The puzzle counts as played only while it's on screen with the app in front: not in the
+    /// background or locked, not left for Home or a menu, not under the give-up sheet, and not once
+    /// the run has ended. The shown clock and the session's pause and resume together.
+    private func syncActive(onScreen: Bool? = nil) {
+        guard case .playing(let session, _) = phase else { return }
+        let on = onScreen ?? (shown && scenePhase == .active && !askGiveUp && result == nil && ending == nil)
+        if on { active.resume(at: activeNow()) } else { active.pause(at: activeNow()) }
+        activeOrder += 1
+        let order = activeOrder
+        // Going to the background: a few seconds to tell the server the time so far (the session
+        // sends an empty batch, or what waits). Asking for them doesn't block.
+        let away = !on && scenePhase == .background ? BackgroundTime() : nil
+        Task {
+            await session.setActive(on, order: order)
+            guard let away else { return }
+            await session.flush()
+            away.end()
+        }
+    }
+
     private func giveUp() {
         guard case .playing(let session, _) = phase else { return }
         givingUp = true
@@ -291,5 +354,21 @@ struct DailyPuzzleScreen: View {
             await session.giveUp()
             givingUp = false
         }
+    }
+}
+
+/// A few seconds of background time, ended when the work is done or when the system says time's up.
+@MainActor
+private final class BackgroundTime {
+    private var id = UIBackgroundTaskIdentifier.invalid
+
+    init() {
+        id = UIApplication.shared.beginBackgroundTask(withName: "daily.active") { [weak self] in self?.end() }
+    }
+
+    func end() {
+        guard id != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(id)
+        id = .invalid
     }
 }

@@ -129,10 +129,14 @@ struct TVBoardStateTests {
         #expect(TVBoardState.resultWords(result(.solved)) == "2:05")
         #expect(TVBoardState.resultWords(result(.solved, timeMs: 3_725_000)) == "1:02:05")
         #expect(TVBoardState.resultWords(result(.solved, game: "sniff", guesses: 4)) == "4 of 6")
-        #expect(TVBoardState.resultWords(result(.missed, game: "sniff", guesses: 6)) == "Missed")
+        // A run that didn't finish: how far it got.
+        let out = DailyResult(game: "nine-lives", date: "d", number: 1, outcome: .missed, timeMs: 1, progress: 0.62, percent: 62)
+        #expect(TVBoardState.resultWords(out) == "62%")
+        let old = DailyResult(game: "sniff", date: "d", number: 1, outcome: .gaveUp, timeMs: 1, progress: 0.409)
+        #expect(TVBoardState.resultWords(old) == "40%")
         #expect(TVBoardState.resultWords(result(.done, game: "box-fort", points: 1240)) == "1,240")
-        #expect(TVBoardState.resultWords(result(.gaveUp)) == "Gave up")
-        #expect(TVBoardState.resultWords(result(.closed)) == "Closed")
+        #expect(TVBoardState.resultWords(DailyResult(game: "test", date: "d", number: 1, outcome: .gaveUp, timeMs: 1, progress: 0.25, percent: 25)) == "25%")
+        #expect(TVBoardState.resultWords(DailyResult(game: "test", date: "d", number: 1, outcome: .closed, timeMs: 1, progress: 0, percent: 0)) == "0%")
     }
 
     @Test func aWholeFamilyShowsAndPastSixTheRestAreCounted() throws {

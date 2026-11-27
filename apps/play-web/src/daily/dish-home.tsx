@@ -10,7 +10,7 @@ import { useApp } from "../store/app";
 import { Button } from "../ui/common";
 
 import { myRow, useDish } from "./dish-store";
-import { resultWords } from "./format";
+import { resultWords, unfinished } from "./format";
 import { DAILY_WEB_GAMES } from "./registry";
 import { lookOf, Treat } from "./treats";
 
@@ -50,18 +50,20 @@ export function TodayDish() {
           const mine = myRow(dish.board, game);
           const look = lookOf(game);
           const words = mine?.result ? resultWords(mine.result) : mine?.playing ? "Playing" : "Play";
+          // Finished: a tick and a white pill. Ended without finishing: neither, as on the board.
+          const finished = !!mine?.result && !unfinished(mine.result);
           return (
             <button
               type="button"
               key={game}
-              class={`dd-tile ${mine?.result ? "done" : ""}`}
+              class={`dd-tile ${finished ? "done" : mine?.result ? "ended" : ""}`}
               style={{ "--c": look.color, "--d": look.deep }}
               onClick={() => navigate({ kind: "daily", game })}
             >
               <Treat game={game} size={52} />
               <span class="dd-tile-title">{look.title}</span>
               <span class="dd-tile-sub">{words}</span>
-              {mine?.result ? <span class="dd-tick" aria-hidden="true" /> : null}
+              {finished ? <span class="dd-tick" aria-hidden="true" /> : null}
             </button>
           );
         })}

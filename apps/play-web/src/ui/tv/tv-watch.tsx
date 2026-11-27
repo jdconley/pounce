@@ -11,7 +11,7 @@ import { art } from "../../lib/art";
 import { play } from "../../lib/sound";
 import { Cat } from "../common";
 
-import { gameTitle, offerWords, resultWords, type Frame, type Offer, type Watching } from "./tv-board-model";
+import { endedWords, gameTitle, offerWords, resultWords, type Frame, type Offer, type Watching } from "./tv-board-model";
 
 import type { DailyResult } from "@pounce/play-api/daily/module";
 
@@ -77,8 +77,6 @@ export function TvWatchCard(props: { offer: Offer; onWatch: () => void; onNotNow
   );
 }
 
-const ENDED_WORDS: Record<DailyResult["outcome"], string> = { solved: "Solved", done: "Done", missed: "Missed", gaveUp: "Gave up", closed: "Closed" };
-
 /** A run, live: who and which game on top, the game's own view below, its result once it ends. */
 export function TvWatch(props: { watching: Watching; frame: Frame | undefined; ended: { result: DailyResult; name: string } | null; onBack: () => void }) {
   const { watching, ended, frame } = props;
@@ -114,8 +112,9 @@ export function TvWatch(props: { watching: Watching; frame: Frame | undefined; e
         <div class="tv-watch-ended" role="status">
           <img class="tv-watch-ended-burst" src={art("sunburst")} alt="" aria-hidden="true" />
           <Cat cat={watching.cat} pose={ended.result.outcome === "solved" || ended.result.outcome === "done" ? "celebrate" : "idle"} size="calc(var(--u) * 260)" />
-          <p class="tv-watch-ended-title outlined">{ENDED_WORDS[ended.result.outcome]}</p>
-          {ended.result.outcome === "solved" || ended.result.outcome === "done" ? <p class="tv-watch-ended-result">{resultWords(ended.result)}</p> : null}
+          <p class="tv-watch-ended-title outlined">{endedWords(ended.result)}</p>
+          {/* The time or points, or how far it got ("62%"). */}
+          <p class="tv-watch-ended-result">{resultWords(ended.result)}</p>
         </div>
       ) : null}
     </section>
