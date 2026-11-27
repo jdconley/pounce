@@ -4,6 +4,7 @@ import { GAMES, gameTitle } from "@pounce/play-api/games/index";
 import { describe, expect, test } from "vitest";
 
 import { CATALOG, GAME_IDS, RULE_NAMES, SHELF, rulesLine, titleOf } from "../src/lib/catalog";
+import { TUMBLE_ON } from "../src/lib/env";
 import { RULE_COPY } from "../src/table/bw-model";
 
 /** Games the server deals that this player doesn't draw yet: each leaves the list when its web table lands. */
@@ -20,9 +21,17 @@ describe("Home's game shelf", () => {
     expect(titleOf("chess")).toBe(gameTitle("chess"));
   });
 
-  test("keeps Toy Tumble off the shelf until the build turns it on", () => {
-    expect(SHELF).toEqual(["cat-tower", "tiles", "birdwatch"]);
+  test("has Toy Tumble on the shelf when the build turns it on", () => {
+    expect(SHELF).toEqual(TUMBLE_ON ? ["cat-tower", "tiles", "birdwatch", "tumble"] : ["cat-tower", "tiles", "birdwatch"]);
     expect(GAME_IDS).toContain("tumble");
+  });
+
+  test("the deployed build turns Toy Tumble on", () => {
+    const ci = readFileSync(new URL("../../../.github/workflows/ci.yml", import.meta.url), "utf8");
+    const deploy = ci.slice(ci.indexOf("\n  deploy-play-api:"));
+    const build = deploy.slice(deploy.indexOf("- name: Build the web player"), deploy.indexOf("- name: Deploy"));
+    expect(build).toContain("pnpm --filter @pounce/play-web build");
+    expect(build).toMatch(/\n\s+WEB_TUMBLE: "on"\n/);
   });
 });
 

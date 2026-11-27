@@ -69,6 +69,13 @@ final class FrameRateTests: XCTestCase {
         play("tiles-late", as: "tuna-tiles-late", ready: "tiles.debug")
     }
 
+    /// Toy Tumble against five House Cats (`-demo tumble-six`, spec §7): this phone's box plays
+    /// itself through the scene's own input calls (`-tumble-autoplay`), the cats think fast
+    /// (`-tumble-busy`) and throw tricks at it, junk lands, rows clear, for a minute.
+    func testToyTumbleSixSeatsPlaysAtTheTopFrameRate() {
+        play("tumble-six", as: "toy-tumble-6", ready: "tumble.debug", extra: ["-tumble-autoplay", "-tumble-busy"], minimum: 60)
+    }
+
     // MARK: playing and the gate
 
     /// `release`: seconds into the window when a held demo goes on (`Live.releaseDemo`).
@@ -76,8 +83,9 @@ final class FrameRateTests: XCTestCase {
     /// phone's turn by the window's end (the probe's `tv`), so the window measured the change.
     private func play(
         _ demo: String, as name: String, ready: String, extra: [String] = [], release: TimeInterval? = nil,
-        tilesTurn: Bool = false, file: StaticString = #filePath, line: UInt = #line
+        tilesTurn: Bool = false, minimum: Double = 0, file: StaticString = #filePath, line: UInt = #line
     ) {
+        let seconds = max(self.seconds, minimum)
         let app = Live.demo(demo, speed: 1)
         app.launchArguments += ["-autoplay"] + extra
         app.launch()

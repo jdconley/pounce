@@ -88,15 +88,21 @@ public enum BirdEndReason: String, Codable, Sendable { case target, left }
 /// A game option a room carries (`room.options`), set in the lobby by the host.
 public struct RoomOptions: Codable, Equatable, Sendable {
     public var rules: BirdRules?
+    /// Toy Tumble's House Cat level.
+    public var cats: TumbleCats?
 
-    public init(rules: BirdRules? = nil) { self.rules = rules }
+    public init(rules: BirdRules? = nil, cats: TumbleCats? = nil) {
+        self.rules = rules
+        self.cats = cats
+    }
 
-    private enum CodingKeys: String, CodingKey { case rules }
+    private enum CodingKeys: String, CodingKey { case rules, cats }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        // A rule set this build doesn't know reads as none, never as a broken room.
+        // A rule set or level this build doesn't know reads as none, never as a broken room.
         rules = (try? c.decodeIfPresent(String.self, forKey: .rules)).flatMap(BirdRules.init(rawValue:))
+        cats = (try? c.decodeIfPresent(String.self, forKey: .cats)).flatMap(TumbleCats.init(rawValue:))
     }
 }
 

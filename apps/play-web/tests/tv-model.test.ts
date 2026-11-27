@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, test } from "vitest";
 
-import { anyoneSeated, back, bootPhase, cheerStep, gameOf, lobbySeats, momentFor, otherGame, overTitle, safeToReload, standings, NO_CHEER, turnSeat, turnWords } from "../src/ui/tv/tv-model";
+import { TUMBLE_ON } from "../src/lib/env";
+import { anyoneSeated, back, bootPhase, cheerStep, gameOf, lobbySeats, momentFor, otherGame, overTitle, posterLayout, safeToReload, standings, NO_CHEER, turnSeat, turnWords } from "../src/ui/tv/tv-model";
 
 import type { RoomView } from "@pounce/play-api/protocol";
 
@@ -69,8 +70,10 @@ describe("the TV lobby", () => {
   test("Change game makes the other game", () => {
     expect(otherGame("cat-tower")).toBe("tiles");
     expect(otherGame("tiles")).toBe("birdwatch");
-    // Purrtrait and Toy Tumble are off the shelf in a build without their flags.
-    expect(otherGame("birdwatch")).toBe("cat-tower");
+    // Toy Tumble is on the shelf, after Birdwatch, in a build with WEB_TUMBLE=on (the deployed one);
+    // Purrtrait only with WEB_PURRTRAIT=on, which tests don't have.
+    expect(otherGame("birdwatch")).toBe(TUMBLE_ON ? "tumble" : "cat-tower");
+    if (TUMBLE_ON) expect(otherGame("tumble")).toBe("cat-tower");
     expect(otherGame("purrtrait")).toBe("cat-tower");
     expect(gameOf(lobby([open]))).toBe("cat-tower");
     expect(gameOf(lobby([open], "tiles"))).toBe("tiles");
@@ -215,5 +218,16 @@ describe("Birdwatch on the TV", () => {
 
   test("its events never cheer twice", () => {
     expect(cheerStep(NO_CHEER, { kind: "birdwatch", event: { kind: "gameOver", winners: [0], scores: [300, 0], reason: "target" } })).toEqual(NO_CHEER);
+  });
+});
+
+describe("Home's posters on the TV", () => {
+  test("two stack, three stack shorter, four sit two by two, five sit two by two with the last across", () => {
+    expect([2, 3, 4, 5].map(posterLayout)).toEqual(["", "three", "grid", "five"]);
+  });
+
+  test("every layout but the plain stack has its rules in the stylesheet", () => {
+    const css = readFileSync(new URL("../src/ui/tv/tv-board.css", import.meta.url), "utf8");
+    for (const layout of ["three", "grid", "five"]) expect(css, layout).toContain(`.tv-games.${layout} {`);
   });
 });

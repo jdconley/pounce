@@ -3,7 +3,19 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
-import { BIRDWATCH_DESCRIPTION, BIRDWATCH_ONLY_DESCRIPTION, BIRDWATCH_TITLE, DAILY_DESCRIPTION, DESCRIPTION, HOME_CSP, homePage, installState } from "./home";
+import {
+  BIRDWATCH_DESCRIPTION,
+  BIRDWATCH_ONLY_DESCRIPTION,
+  BIRDWATCH_TITLE,
+  DAILY_DESCRIPTION,
+  DESCRIPTION,
+  HOME_CSP,
+  homePage,
+  installState,
+  pageDescription,
+  TUMBLE_DESCRIPTION,
+  TUMBLE_TITLE,
+} from "./home";
 import { APPLE_CREDIT } from "./layout";
 import { MEDIA } from "./site-media";
 
@@ -373,6 +385,53 @@ describe("homePage", () => {
         expect(main(on)).not.toMatch(/\p{Extended_Pictographic}/u);
       }
     }
+  });
+
+  test("Toy Tumble shows only with it on: the real-time game, in the browser now and coming to the iPhone app in 1.4", async () => {
+    for (const install of [{}, { testflightUrl: TESTFLIGHT }, { appStoreUrl: APP_STORE }]) {
+      for (const daily of [false, true]) {
+        for (const birdwatch of [false, true]) {
+          const off = await homePage(install, ORIGIN, true, daily, birdwatch).text();
+          // The words; the TV's start screen (a real screenshot) shows its poster either way.
+          expect(main(off).replace(/ alt="[^"]*"/g, "")).not.toMatch(/Toy Tumble|hairball/i);
+          const on = await homePage(install, ORIGIN, true, daily, birdwatch, true).text();
+          const count = birdwatch ? "Four" : "Three";
+          expect(on).toContain(`<h2 id="games">${count} games</h2>`);
+          expect(on).toContain(`${count} games for the whole family${daily ? ", and four new puzzles every day" : ""}. Gather round the TV`);
+          expect(on).toContain('<h3>Toy Tumble</h3><p class="meta">Falling toys, in real time. 2 to 6 players.</p>');
+          for (const s of ["Everyone plays at once on their own phone, and the TV shows every box.", "hairballs", "pocket tricks", "Win three rounds to take the game."]) {
+            expect(on, s).toContain(s);
+          }
+          // Where it plays: the browser now; the iPhone app in 1.4. Never the App Store.
+          expect(on).toContain('<p class="where"><a href="/play/">Play it in your browser</a>. Coming to the iPhone app in 1.4.</p>');
+          expect(on).toMatch(/<img src="\/static\/toy-tumble-200\.[0-9a-f]{10}\.jpg" srcset=/);
+          // Four games sit two by two; an odd last one spans the row.
+          expect(on.match(/class="panel game wide"/g) ?? []).toHaveLength(birdwatch ? 0 : 1);
+          // The title, the description and the social cards name it apart from the app; the App Store app's entry never does.
+          const title = birdwatch ? TUMBLE_TITLE : "Pounce: Family Games | Cat Tower, Tuna Tiles and Toy Tumble";
+          expect(on).toContain(`<title>${title}</title>`);
+          expect(on).toContain(`<meta property="og:title" content="${title}">`);
+          const description = pageDescription(daily, birdwatch, true);
+          if (birdwatch && daily) expect(description).toBe(TUMBLE_DESCRIPTION);
+          expect(description.length).toBeLessThanOrEqual(160);
+          expect(description).toMatch(/^Family game night, every night\. /);
+          expect(description).toMatch(/Toy Tumble[^.]* in your browser\./);
+          expect(on).toContain(`<meta name="description" content="${description}">`);
+          expect(on).toContain(`<meta property="og:description" content="${description}">`);
+          expect(ld(on).description).toBe(daily ? DAILY_DESCRIPTION : DESCRIPTION);
+          expect(JSON.stringify(ld(on))).not.toMatch(/Toy Tumble|Birdwatch/);
+          expect(web(on).description).toContain(birdwatch ? "Cat Tower, Tuna Tiles, Birdwatch and Toy Tumble in a web browser" : "Cat Tower, Tuna Tiles and Toy Tumble in a web browser");
+          expect(web(on).description).toContain("Cat Tower and Tuna Tiles tables are shared with the iPhone app");
+          expect(on).not.toMatch(/[\u2013\u2014]/);
+          expect(main(on)).not.toMatch(/\p{Extended_Pictographic}/u);
+        }
+      }
+    }
+  });
+
+  test("the TV's start screen shows every game on the shelf, Toy Tumble too", () => {
+    expect(MEDIA.screens.tvHome.webp.map((f) => f.w)).toEqual([480, 720, 1040]);
+    expect(MEDIA.screens.tumble.width).toBe(200);
   });
 });
 

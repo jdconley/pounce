@@ -70,7 +70,7 @@ jobs:
           pnpm --filter @pounce/play-web exec playwright install --with-deps chromium webkit firefox
           # apt's lock and partial folder are root's alone; the cache can't read them, and doesn't need them.
           sudo rm -rf ~/apt-archives/lock ~/apt-archives/partial
-      # Toy Tumble on the shelf for its e2e; the deployed build keeps it off until switch-on.
+      # Toy Tumble on the shelf, as the deployed build has it.
       - run: pnpm --filter @pounce/play-web build
         env:
           WEB_TUMBLE: "on"
@@ -175,9 +175,10 @@ jobs:
       - name: Build the web player
         if: steps.creds.outputs.ready == 'true'
         # Built from this commit into ./public/play, so the Worker and the web player always
-        # deploy together and never drift apart.
+        # deploy together and never drift apart. Toy Tumble is on the shelf in production.
         env:
           WEB_BUILD: ${{ github.sha }}
+          WEB_TUMBLE: "on"
         run: pnpm --filter @pounce/play-web build
       - name: Deploy
         if: steps.creds.outputs.ready == 'true'

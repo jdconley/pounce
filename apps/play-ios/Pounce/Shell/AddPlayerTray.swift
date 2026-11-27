@@ -16,6 +16,8 @@ struct AddPlayerTray: View {
     let sharesLinks: Bool
     /// The QR code is up: "Same room" shows pressed.
     let scanning: Bool
+    /// Someone sharing this phone can take a seat (not in Toy Tumble: one seat per device).
+    var passAndPlay = true
     let wiggles: (LobbyWiggle) -> Int
     /// Show on TV, at the tray's end.
     let onTV: () -> Void
@@ -24,7 +26,7 @@ struct AddPlayerTray: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    private var ways: [Way] { Way.allCases.filter { sharesLinks || $0 != .away } }
+    private var ways: [Way] { Way.allCases.filter { (sharesLinks || $0 != .away) && (passAndPlay || $0 != .here) } }
 
     var body: some View {
         let roomy = sizeClass == .regular

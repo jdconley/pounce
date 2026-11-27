@@ -79,8 +79,35 @@ public enum GameCatalog {
         id: "birdwatch", title: "Birdwatch", pitch: "Bid, call trump, take tricks.",
         minPlayers: 4, maxPlayers: 6, art: "game-birdwatch", tint: .lime, availability: .available)
 
-    /// Catalog order: the order games were added, oldest first.
-    public static let all: [Entry] = [catTower, tiles, birdwatch]
+    /// The real-time falling-toys battle (design 2026-11-26). Gated: see `tumbleShips`.
+    public static let tumble = Entry(
+        id: "tumble", title: "Toy Tumble", pitch: "Drop toys, clear rows, toss tricks.",
+        minPlayers: 2, maxPlayers: 6, art: "game-tumble", tint: .lime, availability: .available)
+
+    /// Toy Tumble comes with the app's 1.4 (design §10.4): a Release build below 1.4 never shows
+    /// it or asks the server for it, so `main` can build 1.3 with it merged. Debug builds always
+    /// have it, to play it on a dev server.
+    public static func tumbleShips(debug: Bool, version: String?) -> Bool {
+        if debug { return true }
+        guard let version = AppVersion(version), let first = AppVersion("1.4") else { return false }
+        return version >= first
+    }
+
+    /// The games this build has, in catalog order (the order games were added, oldest first).
+    public static func games(debug: Bool, version: String?) -> [Entry] {
+        [catTower, tiles, birdwatch] + (tumbleShips(debug: debug, version: version) ? [tumble] : [])
+    }
+
+    static var isDebug: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
+    /// Catalog order: the order games were added, oldest first. Toy Tumble only from 1.4.
+    public static let all: [Entry] = games(debug: isDebug, version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)
 
     /// The game the server deals when a table is created.
     public static let dealt = catTower

@@ -260,6 +260,12 @@ enum ArtName {
     }
 
     // MARK: Birdwatch (design 2026-11-25 §3)
+    /// Toy Tumble (design 2026-11-26). The toys, hairballs, badges and box are drawn in code
+    /// (`TumbleArt`); only the shelf's cover is an image.
+    enum Tumble {
+        static let cover = "game-tumble"
+    }
+
     enum Bird {
         /// The Bird (96x96 pt): a round, bright songbird, drawn on its white card face.
         static let card = "bird-card"

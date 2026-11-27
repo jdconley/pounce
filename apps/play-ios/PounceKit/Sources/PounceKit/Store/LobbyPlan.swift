@@ -7,6 +7,8 @@ public enum StartBlock: Equatable, Sendable {
     /// Fewer cats (people or House Cats) than the game needs (`needed`: two, or Birdwatch's
     /// four) and no open seat anyone could take.
     case notEnoughPlayers(players: Int, needed: Int = 2)
+    /// Toy Tumble: these people's devices aren't connected (the server says `not_connected`).
+    case offline(seats: [Int])
 }
 
 extension TableModel {
@@ -24,7 +26,21 @@ extension TableModel {
         if mySeats.isEmpty { return .notSeated }
         let open = blockingSeats.count
         if open > 0 { return .openSeats(open: open, players: playerCount) }
-        return playerCount < neededPlayers ? .notEnoughPlayers(players: playerCount, needed: neededPlayers) : nil
+        if playerCount < neededPlayers { return .notEnoughPlayers(players: playerCount, needed: neededPlayers) }
+        let offline = offlineSeats
+        return offline.isEmpty ? nil : .offline(seats: offline)
+    }
+
+    /// Toy Tumble plays live on every person's own device: the people whose device isn't here.
+    /// Empty for every other game.
+    public var offlineSeats: [Int] {
+        guard room.isTumble else { return [] }
+        return room.seats.indices.filter { room.seats[$0].kind == .human && room.seats[$0].presence != .awake }
+    }
+
+    /// Toy Tumble holds one seat per device: no pass and play.
+    public var oneSeatPerDevice: Bool {
+        room.isTumble
     }
 
     /// Start with the cats already here: closes every open seat, then starts. Nil unless open

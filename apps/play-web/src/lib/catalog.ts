@@ -20,9 +20,9 @@ export const CATALOG: Record<GameId, { title: string; minSeats: number; maxSeats
 export const GAME_IDS = Object.keys(CATALOG) as GameId[];
 
 /**
- * The games Home and the TV offer a new table of. Toy Tumble and Purrtrait stay off the shelf
- * until the server deals them (`GAMES` lists them) and the build turns them on (`WEB_TUMBLE=on`,
- * `WEB_PURRTRAIT=on`); a table someone else made still draws.
+ * The games Home and the TV offer a new table of. Toy Tumble is on the shelf in a build with
+ * `WEB_TUMBLE=on`, as the deployed one is; Purrtrait in one with `WEB_PURRTRAIT=on`, which the
+ * deployed one isn't until it is switched on. A table someone else made draws either way.
  */
 export const SHELF: GameId[] = GAME_IDS.filter((id) => (id !== "tumble" || TUMBLE_ON) && (id !== "purrtrait" || PURRTRAIT_ON));
 

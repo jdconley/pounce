@@ -25,7 +25,7 @@ import { TvBoardLink, TvBoardRoom } from "./tv-board";
 import { boardToKeep, keptBoard } from "./tv-board-model";
 import { NOPE, TvLobby } from "./tv-lobby";
 import { TvMenu } from "./tv-menu";
-import { back, bootPhase, cheerStep, gameOf, NO_CHEER, otherGame, safeToReload, type MenuView } from "./tv-model";
+import { back, bootPhase, cheerStep, gameOf, NO_CHEER, otherGame, posterLayout, safeToReload, type MenuView } from "./tv-model";
 import { MenuButton, TvOver, TvTable } from "./tv-table";
 import "./tv.css";
 
@@ -313,8 +313,7 @@ function TvHome(props: { board: string | null; onLinked: (room: string) => void;
           {link ? link.code : " "}
         </p>
       </div>
-      {/* Up to three posters stack; four sit two by two; five or six in three rows of two. */}
-      <div class={`tv-games ${SHELF.length + (dish ? 1 : 0) >= 5 ? "grid five" : SHELF.length + (dish ? 1 : 0) === 4 ? "grid" : SHELF.length + (dish ? 1 : 0) === 3 ? "three" : ""}`}>
+      <div class={`tv-games ${posterLayout(SHELF.length + (dish ? 1 : 0))}`}>
         {SHELF.map((id, i) => (
           <button
             type="button"

@@ -60,9 +60,7 @@ final class BoardShotTests: XCTestCase {
 
         // Back to the board from its poster, then Unlink: home again, and the poster shows the link.
         XCTAssertTrue(waitForFocus(app, "tv.poster.cat-tower"))
-        press(app, .right, to: "tv.poster.tiles")
-        press(app, .right, to: "tv.poster.birdwatch")
-        press(app, .right, to: "tv.poster.board")
+        walkShelfToBoard(app)
         XCUIRemote.shared.press(.select)
         XCTAssertTrue(el(app, "tv.board").waitForExistence(timeout: Live.t(10)))
         XCUIRemote.shared.press(.menu)
@@ -71,9 +69,7 @@ final class BoardShotTests: XCTestCase {
         press(app, .down, to: "tv.menu.unlink")
         XCUIRemote.shared.press(.select)
         XCTAssertTrue(waitForFocus(app, "tv.poster.cat-tower", timeout: 10), "Unlink didn't go home")
-        press(app, .right, to: "tv.poster.tiles")
-        press(app, .right, to: "tv.poster.birdwatch")
-        press(app, .right, to: "tv.poster.board")
+        walkShelfToBoard(app)
         XCUIRemote.shared.press(.select)
         XCTAssertTrue(waitForFocus(app, "tv.boardLink.back"), "the board's link panel has Back focused")
         Thread.sleep(forTimeInterval: 0.8)

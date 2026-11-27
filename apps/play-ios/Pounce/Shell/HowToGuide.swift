@@ -23,6 +23,7 @@ struct HowToGuide {
         switch game.id {
         case GameCatalog.catTower.id: catTower
         case GameCatalog.tiles.id: tiles
+        case GameCatalog.tumble.id: tumble
         default: HowToGuide(sections: [], split: 0)
         }
     }
@@ -85,6 +86,56 @@ struct HowToGuide {
                     ]),
             ],
             split: 2)
+    }
+
+    /// Toy Tumble (design §4, in our words), with the tricks table.
+    static let tumble = HowToGuide(
+        sections: [
+            Section(
+                title: String(localized: "The box", comment: "Toy Tumble rules section"), color: Palette.violet,
+                lines: [
+                    String(localized: "Everyone plays at once, on their own phone. Toys fall into your toy box.", comment: "Toy Tumble rules: the idea"),
+                    String(localized: "Fill a row from side to side and it clears.", comment: "Toy Tumble rules: clearing"),
+                    String(localized: "A box that fills to the top tips over. The last box standing wins the round. First to 3 rounds wins.", comment: "Toy Tumble rules: winning"),
+                ]),
+            Section(
+                title: String(localized: "Moving", comment: "Toy Tumble rules section"), color: Palette.teal,
+                lines: [
+                    String(localized: "Drag left or right anywhere to move the toy.", comment: "Toy Tumble rules: drag"),
+                    String(localized: "Tap to turn it. Drag down to speed it up. Flick down to drop it.", comment: "Toy Tumble rules: turn and drop"),
+                    String(localized: "The paw prints show where it will land. Your cat holds the next toy.", comment: "Toy Tumble rules: landing and next"),
+                ]),
+            Section(
+                title: String(localized: "Hairballs", comment: "Toy Tumble rules section"), color: Palette.orange,
+                lines: [
+                    String(localized: "Clear 2 rows at once to send 1 hairball row to everyone else. 3 rows send 2, and 4 rows send 4.", comment: "Toy Tumble rules: junk sent"),
+                    String(localized: "Hairballs sent to you wait in your meter for 2 seconds, then push in under your toys.", comment: "Toy Tumble rules: junk waits"),
+                    String(localized: "Clear rows while they wait to block them. A big clear blocks and hits back.", comment: "Toy Tumble rules: blocking"),
+                ]),
+            Section(
+                title: String(localized: "Tricks", comment: "Toy Tumble rules section"), color: Palette.magenta,
+                lines: [
+                    String(localized: "Each row you clear puts a glowing trick on a toy. Clear its row to keep it. You can hold 6.", comment: "Toy Tumble rules: getting tricks"),
+                    String(localized: "Tap a trick, then any box, yours too. Or drag it onto a box.", comment: "Toy Tumble rules: using tricks"),
+                    String(localized: "Near the top, you get the big saves more often.", comment: "Toy Tumble rules: comebacks"),
+                ]),
+            Section(
+                title: String(localized: "The tricks", comment: "Toy Tumble rules section: the tricks table"), color: Palette.sky,
+                lines: TumbleTrick.allCases.map { "\(TumbleWords.trick($0)): \(Self.tumbleDoes($0))" }),
+        ],
+        split: 3)
+
+    static func tumbleDoes(_ t: TumbleTrick) -> String {
+        switch t {
+        case .hairball: String(localized: "adds a hairball row now. It can't be blocked.", comment: "Toy Tumble rules: what Hairball does")
+        case .swipe: String(localized: "shoves every row a little left or right.", comment: "Toy Tumble rules: what Paw Swipe does")
+        case .catnip: String(localized: "toys fall 4 times as fast for 10 seconds.", comment: "Toy Tumble rules: what Catnip does")
+        case .scoop: String(localized: "clears the bottom 2 rows.", comment: "Toy Tumble rules: what Scoop does")
+        case .settle: String(localized: "every toy drops to fill the gaps, then full rows clear.", comment: "Toy Tumble rules: what Settle does")
+        case .nap: String(localized: "nothing reaches the box for 10 seconds.", comment: "Toy Tumble rules: what Nap does")
+        case .swap: String(localized: "trades boxes with another player.", comment: "Toy Tumble rules: what Swap does")
+        case .bath: String(localized: "wipes the box empty, waiting hairballs too.", comment: "Toy Tumble rules: what Bath does")
+        }
     }
 
     static let catTower = HowToGuide(
