@@ -328,27 +328,30 @@ export class GameRoom extends DurableObject<Env> {
    * `not_near` (a stranger to a same-room table without the TV's live near key, `near`) or
    * `none` (no such room). `screen`: the device asks to be a screen, which no key decides.
    * `games`: what the asking app can draw; one that can't draw this table's game needs no key,
-   * since `fetch` tells it there is no such table. A `not_near` is counted against the table too.
+   * since `fetch` tells it there is no such table. Counts nothing: the guard tells the table of a
+   * `not_near` with `missedNear` once its rate limits have taken the guess.
    */
   knows(deviceId: string, near: string | null = null, screen = false, games?: string[]): "member" | "exists" | "not_near" | "none" {
     const core = this.core;
     if (!core) return "none";
-    const known = core.knows(deviceId, near, screen, games);
-    if (known === "not_near") this.missedNear(core);
-    return known;
+    return core.knows(deviceId, near, screen, games);
   }
 
-  /** Whether `near` is a live near key at this table: what `/e/<code>?near=` asks before it sends a phone on. */
+  /** Whether `near` is a live near key at this table: what `/e/<code>?near=` asks before it sends a phone on. Counts nothing. */
   nearLive(near: string): boolean {
     const core = this.core;
     if (!core) return false;
-    const live = core.nearLive(near);
-    if (!live && core.sameRoom()) this.missedNear(core);
-    return live;
+    return core.nearLive(near);
   }
 
-  /** A wrong near guess, counted by the table itself (whatever address it came from) and kept across a wake. */
-  private missedNear(core: Room): void {
+  /**
+   * A wrong near guess, counted by the table itself (whatever address it came from) and kept
+   * across a wake. Only a guess the rate limits took counts: a locked-out guesser's refused ones
+   * never close the typed code (design §5.3).
+   */
+  missedNear(): void {
+    const core = this.core;
+    if (!core?.sameRoom()) return;
     core.noteNearMiss();
     this.persist(core);
   }
@@ -956,7 +959,9 @@ export class GameRoom extends DurableObject<Env> {
     const actor = state.status === "playing" ? core.actor() : null;
     // A device the host turned away is off the list: it can't go back (design §10.2).
     const devices = new Set([...tableDevices(state)].filter((id) => !core.turnedAway(id)));
-    const players = new Set(core.seatPlayers());
+    // A player the host removed is off it too, on every device they sign in on (design §10.2).
+    const removedPlayers = new Set(state.removed?.players);
+    const players = new Set(core.seatPlayers().filter((p) => !removedPlayers.has(p)));
     const next = state.rematch?.code ?? null;
     // Who sits where, and as whom: a join, a rename or a new cat reaches Home's cards.
     const faces = state.seats.map((s) => [s.kind, s.person?.id, s.person?.name, s.person?.cat, s.playerId ?? s.deviceId]);

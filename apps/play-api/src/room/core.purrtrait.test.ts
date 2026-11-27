@@ -1110,6 +1110,56 @@ describe("remove (design §10.2, ruling 10)", () => {
     expect(spec.hostDeviceId).toBe("a");
   });
 
+  it("a guesser's forfeit, and a remove in a game, move seq with the snapshots they send", () => {
+    const r = game3();
+    // Seat 0 ("a") is choosing; seat 2 leaves as a guesser: no turn ends, so the game says nothing.
+    const before = r.state.seq;
+    const left = act(r, "c", 2, { type: "forfeit" });
+    expect(errorsOf(left)).toEqual([]);
+    expect(game(r).out[2]).toBe(true);
+    expect(r.state.seq).toBeGreaterThan(before);
+    const snapSeq = (out: Outbound[]) => (out.find((o) => o.to === "a" && o.message.t === "snapshot")?.message as { seq: number }).seq;
+    expect(snapSeq(left)).toBe(r.state.seq);
+    // The host removes a guesser in a game: the same.
+    const r2 = game3();
+    const mid = r2.state.seq;
+    const removed = remove(r2, "a", 2);
+    expect(errorsOf(removed)).toEqual([]);
+    expect(game(r2).out[2]).toBe(true);
+    expect(r2.state.seq).toBeGreaterThan(mid);
+    expect(snapSeq(removed)).toBe(r2.state.seq);
+  });
+
+  it("Play again keeps the host: a guest's tap doesn't make them host", () => {
+    const r = game3();
+    playOut(r, (seat) => ["a", "b", "c"][seat] as string);
+    r.handle("c", { t: "rematch" });
+    const spec = r.drainRematch() as NonNullable<ReturnType<Room["drainRematch"]>>;
+    expect(spec.hostDeviceId).toBe("a");
+    // At the new table the guest who tapped it still can't remove anyone; the host can.
+    const next = new RoomCore<PurrState>(RoomCore.rematchState<PurrState>("CDFGH", spec, clock), () => clock, rng, undefined, 1, FEATURES);
+    ["a", "b", "c"].forEach((d, i) => next.connect(d, players(i + 1)));
+    expect(errorsOf(remove(next, "c", 0))).toEqual(["not_allowed"]);
+    expect(errorsOf(remove(next, "a", 0))).toEqual([]);
+  });
+
+  it("Play again hands the host on (ruling 11) when no seat the host holds is dealt again", () => {
+    const r = game3();
+    playOut(r, (seat) => ["a", "b", "c"][seat] as string);
+    // The host's phone is back with nobody signed in: it holds no seat now.
+    r.connect("a", {});
+    r.handle("c", { t: "rematch" });
+    // The next seat after the host's, held by a person: "b", not whoever tapped.
+    expect(r.drainRematch()?.hostDeviceId).toBe("b");
+    // No seat's own phone holds it any more: the one who tapped, for its person, hosts.
+    const r2 = game3();
+    playOut(r2, (seat) => ["a", "b", "c"][seat] as string);
+    ["a", "b", "c"].forEach((d) => r2.connect(d, {}));
+    r2.connect("y", players(3));
+    r2.handle("y", { t: "rematch" });
+    expect(r2.drainRematch()?.hostDeviceId).toBe("y");
+  });
+
   it("a shared phone whose other person left the game is still let in when one of its people is removed", () => {
     const r = lobby3();
     // "c" seats player 3 and player 4.

@@ -59,9 +59,10 @@ export async function mayMakeScreenLink(env: Env, deviceId: string, ip: string, 
  * guesser learns nothing. Returns the seconds to wait when refused, else whether the room exists.
  *
  * At a same-room table (Purrtrait) the code alone is not enough: a stranger needs the TV's live
- * near key (`ask.near`), and one without it is a wrong guess too, answered `notNear`. A device
- * asking to be a screen (`ask.screen`) needs none; the room says whether it is one. Nor does an
- * app that can't draw the table's game (`ask.games`): the room tells it there is no such table.
+ * near key (`ask.near`), and one without it is a wrong guess too, answered `notNear`, and counted
+ * by the table as well once the limits have taken it. A device asking to be a screen
+ * (`ask.screen`) needs none; the room says whether it is one. Nor does an app that can't draw the
+ * table's game (`ask.games`): the room tells it there is no such table.
  */
 export async function guardJoin(
   env: Env,
@@ -80,6 +81,8 @@ export async function guardJoin(
   ]);
   const retryAt = Math.max(byDevice.retryAt ?? 0, byIp.retryAt ?? 0);
   if (retryAt > 0) return { retryAfter: Math.max(1, Math.ceil((retryAt - now) / 1000)) };
+  // The table counts only a guess the limits took, so a locked-out guesser can't close its typed code.
+  if (known === "not_near") await room(env, code).missedNear();
   return known === "not_near" ? { exists: true, notNear: true } : { exists: !failed };
 }
 
@@ -92,6 +95,8 @@ export async function peekNear(env: Env, code: string, near: string, ip: string,
   try {
     const live = await room(env, code).nearLive(near);
     const { retryAt } = await limiter(env, `ip:${ipBucket(ip)}`).guess(!live, IP_JOIN_RULE, now);
+    // As for joining: the table counts a wrong key only when the address wasn't refused.
+    if (retryAt === null && !live) await room(env, code).missedNear();
     return retryAt === null && live;
   } catch {
     return false;

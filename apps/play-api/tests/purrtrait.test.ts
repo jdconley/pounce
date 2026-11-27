@@ -165,6 +165,33 @@ describe("joining from the TV's code (design §5.2)", { timeout: 30_000 }, () =>
     await opened(await upgrade(mf, code, fresh, `?near=${key}`, { "cf-connecting-ip": "203.0.113.10" }));
   });
 
+  test("a locked-out device's refused guesses don't close the typed code", async () => {
+    const mf = await start();
+    const [tv, guesser, late] = [await mint(mf), await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    const { code: typed } = nearOf(screen);
+    const wrong = `${code}${typed.endsWith("BBB") ? "CCC" : "BBB"}`;
+    // Six counted misses lock the device out; the rest, each from a new /64, are refused uncounted.
+    const statuses: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      const ip = `2001:db8:${(i + 1).toString(16)}::1`;
+      statuses.push((await upgrade(mf, code, guesser, `?near=${wrong}`, { "cf-connecting-ip": ip })).status);
+    }
+    expect(statuses).toEqual([...Array<number>(6).fill(403), ...Array<number>(34).fill(429)]);
+    await opened(await upgrade(mf, code, late, `?near=${typed}`, { "cf-connecting-ip": "203.0.113.9" }));
+  });
+
+  test("a locked-out address's refused looks at /e/ don't close the typed code", async () => {
+    const mf = await start();
+    const [tv, late] = [await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    const { code: typed } = nearOf(screen);
+    const wrong = `${code}${typed.endsWith("BBB") ? "CCC" : "BBB"}`;
+    // 21 counted misses lock the address out; the next 15 are refused uncounted.
+    for (let i = 0; i < 36; i++) await mf.dispatchFetch(`${BASE}/e/${code}?near=${wrong}`, { headers: { "cf-connecting-ip": "203.0.113.50" }, redirect: "manual" });
+    await opened(await upgrade(mf, code, late, `?near=${typed}`, { "cf-connecting-ip": "203.0.113.9" }));
+  });
+
   test("addresses in one IPv6 /64 share one count", async () => {
     const mf = await start();
     const tv = await mint(mf);
@@ -306,11 +333,17 @@ describe("the host removes a player (design §10.2)", { timeout: 30_000 }, () =>
     const y = await mint(mf);
     await profile(mf, y, [cy]);
     expect(await refusal(await upgrade(mf, code, y, `?near=${nearOf(screen).key}`))).toEqual(REMOVED);
+    // A removed signed-in player's other devices drop the table: their player's list loses it.
+    expect(await eventually(() => codes(y), (list) => !list.includes(code))).not.toContain(code);
     pb.send({ t: "act", seat: 1, action: { type: "forfeit" } });
     await pa.until((s) => s.room.status === "over");
     pa.send({ t: "rematch" });
     const next = (await pa.find<{ t: "rematch"; code: string }>((m) => m.t === "rematch")).code;
     const tvNext = await opened(await upgrade(mf, next, tv, "?role=screen"));
+    // Nor does it come back, as the old table or the next one, after Play again.
+    await settle();
+    expect(await codes(y)).not.toContain(code);
+    expect(await codes(y)).not.toContain(next);
     const back = await opened(await upgrade(mf, next, a));
     expect(back.last?.room.seats.filter((s) => s.kind === "human").map((s) => s.person?.name)).toEqual(["Bo", "Alice"]);
     // Out of the new table too, with its TV's live key.

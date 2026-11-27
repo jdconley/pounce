@@ -215,7 +215,8 @@ and `purrtrait-client-messages.json`. Only a Purrtrait room speaks any of this. 
     both back off, and a locked-out device or address gets 429 `too_many_attempts` with
     `retryAfter`, even with the right key.
   - 30 wrong guesses at one table within one key's 30 seconds close the typed code until the next
-    key. The QR's whole key still works.
+    key. The QR's whole key still works. A guess refused with 429 isn't one of the 30, so a
+    locked-out guesser can't close the code for everyone.
   - An app that can't draw Purrtrait is told what any game it can't draw tells it (426 naming the
     game for an app that sends `X-Pounce-App`, else 404), uncounted.
 - **`/e/<CODE>?near=<KEY>`.** With a live key: 302 to `/play/e/<CODE>?near=<KEY>`, the web
@@ -302,3 +303,18 @@ Server to client, with no `seq`, never in a snapshot and never stored:
   guess. The removed player on another device is refused the same way, and a `claim` as them
   answers `removed`.
 - When the host's seat leaves, the host role passes to the next seat still in.
+- Play again keeps the host, whoever taps it, while a seat the host holds is dealt again.
+  Otherwise the role passes to the next dealt seat after the host's that a person holds.
+- A removed player's table drops off the tables list of every device they sign in on.
+
+### Switching it on
+
+Purrtrait stays off on production until the apps draw it. To switch it on:
+
+- Add `purrtrait` to `GAMES` (`apps/play-api/wrangler.jsonc`).
+- The same day, bump the privacy policy's "Last updated" date in `apps/play-api/src/http/privacy.ts`:
+  its drawing lines show from the moment Purrtrait tables can be dealt.
+- Trim the App Review notes (`docs/app-review-notes.md`) first, then add their Purrtrait block, so
+  the whole stays under App Store Connect's 4,000 characters.
+- `PURRTRAIT_APPLINKS` stays off until the App Store app draws Purrtrait.
+- The notice to parents' Purrtrait sentence (PR #179) waits on counsel.

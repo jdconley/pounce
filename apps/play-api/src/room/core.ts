@@ -1921,7 +1921,7 @@ export class RoomCore<S = CatTowerState> {
       name: state.name,
       look: this.look(),
       seats,
-      hostDeviceId: deviceId,
+      hostDeviceId: this.rematchHost(deviceId),
       ...(state.screens?.length ? { screens: [...state.screens] } : {}),
       ...this.rematchMembers(),
       ...(state.removed ? { removed: { devices: [...state.removed.devices], players: [...state.removed.players] } } : {}),
@@ -1930,6 +1930,26 @@ export class RoomCore<S = CatTowerState> {
       ...(state.game === DEFAULT_GAME ? {} : { game: state.game }),
     };
     return [];
+  }
+
+  /**
+   * Who hosts the table Play again deals. Elsewhere it's whoever tapped it. At a same-room table the
+   * host can remove a player, so a tap never hands that on: the host stays while a seat they hold is
+   * dealt again; otherwise ruling 11's handoff picks the next person's seat in seat order after the
+   * host's (or from the first seat), whose own device holds it. With no such seat, the one who tapped.
+   */
+  private rematchHost(deviceId: string): string {
+    const { state } = this;
+    if (!this.sameRoom()) return deviceId;
+    const host = state.hostDeviceId;
+    // `controls` leaves out removed seats and House Cats, which Play again doesn't deal as people.
+    if (state.seats.some((s, i) => s.kind === "human" && this.controls(host, i))) return host;
+    const n = state.seats.length;
+    // After the seat the host's device claimed; with none, from the first seat.
+    const first = state.seats.findIndex((s) => s.deviceId === host) + 1;
+    const held = state.seats.flatMap((s, i) => (s.kind === "human" && this.controls(s.deviceId as string, i) ? [i] : []));
+    const next = held.map((i) => ({ i, d: (i - first + n) % n })).sort((x, y) => x.d - y.d)[0];
+    return next === undefined ? deviceId : ((state.seats[next.i] as SeatInfo).deviceId as string);
   }
 
   /** A same-room table's members, for the table Play again deals: every device here but its screens. */
@@ -2196,6 +2216,9 @@ export class RoomCore<S = CatTowerState> {
   private commit(next: S, events: readonly AnyGameEvent[]): Outbound[] {
     const { state } = this;
     state.gameState = next;
+    // A change the game tells nobody of (a guesser leaving Purrtrait): the snapshots that follow
+    // still carry a new seq, so no device takes them for one it has already seen.
+    if (events.length === 0) state.seq += 1;
     return events.flatMap((event) => {
       if (this.game.startsTurn(event)) state.turnSeq = state.seq + 1;
       return this.broadcast((deviceId) => this.gameEvent(this.game.filterEvent(event, this.controlledSeats(deviceId))));
