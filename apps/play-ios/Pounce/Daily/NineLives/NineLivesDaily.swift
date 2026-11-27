@@ -7,10 +7,13 @@ import SwiftUI
 struct NineLivesDaily: DailyGameView {
     nonisolated static let game = DailyCatalog.nineLives
 
-    /// What a hint fills: cell `i` holds `d` (the server's `nineLives.hint`).
-    struct Reveal: Decodable, Sendable {
-        let i: Int
-        let d: Int
+    /// What the server reveals: a hint's cell, and under the lives rules a wrong number (the last
+    /// one with the solution). PounceKit, `NineLivesReveal`.
+    typealias Reveal = NineLivesReveal
+
+    /// Out of lives, the board fills in the solution under "Out of lives" before the end screen.
+    nonisolated static func endHold(_ result: DailyResult) -> Duration {
+        result.outcome == .missed ? .milliseconds(2600) : .zero
     }
 
     private let session: DailyRunSession
@@ -56,9 +59,31 @@ final class NineLivesSessionDriver: NineLivesDriver {
         queue.yield((move, urgent))
     }
 
+    /// A set under the lives rules: sent at once (everything waiting goes with it), and the
+    /// server's verdict read from its batch's reveals.
+    func check(cell: Int, digit: Int) async -> NineLivesCheck {
+        switch await session.play(NineLivesMove.set(cell: cell, digit: digit), revealing: NineLivesReveal.self) {
+        case .refused:
+            return .refused
+        case .accepted(let reveals):
+            // The batch's reveals: this set's, if it was wrong; the solution rides on the last life's.
+            var verdict = NineLivesCheck.right
+            var solution: [Int]?
+            for case .wrong(let i, let d, let left, let cells) in reveals {
+                if let cells { solution = cells }
+                if i == cell && d == digit { verdict = .wrong(lives: left, solution: nil) }
+            }
+            if case .wrong(let left, _) = verdict { return .wrong(lives: left, solution: solution) }
+            // The run ended in this batch, and a set after the ending one was dropped: unless it's
+            // the answer, it comes back out, and the solution shows there.
+            if let solution, solution[cell] != digit { return .refused }
+            return verdict
+        }
+    }
+
     func hint() async -> (cell: Int, digit: Int)? {
-        guard let reveal = await session.hint(as: NineLivesDaily.Reveal.self) else { return nil }
-        return (reveal.i, reveal.d)
+        guard case .hint(let cell, let digit)? = await session.hint(as: NineLivesReveal.self) else { return nil }
+        return (cell, digit)
     }
 
     /// Hands each move to the session in order, for as long as the screen is up.

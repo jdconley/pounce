@@ -130,6 +130,7 @@ struct TVBoardStateTests {
         #expect(TVBoardState.resultWords(result(.solved, timeMs: 3_725_000)) == "1:02:05")
         #expect(TVBoardState.resultWords(result(.solved, game: "sniff", guesses: 4)) == "4 of 6")
         #expect(TVBoardState.resultWords(result(.missed, game: "sniff", guesses: 6)) == "Missed")
+        #expect(TVBoardState.resultWords(result(.missed, game: "nine-lives")) == "Out of lives")
         #expect(TVBoardState.resultWords(result(.done, game: "box-fort", points: 1240)) == "1,240")
         #expect(TVBoardState.resultWords(result(.gaveUp)) == "Gave up")
         #expect(TVBoardState.resultWords(result(.closed)) == "Closed")

@@ -26,7 +26,7 @@ public struct DailyResult: Sendable, Hashable, Codable {
     public let date: String
     public let number: Int
     public let outcome: DailyOutcome
-    /// From start to the move that ended it, plus 30 seconds a hint.
+    /// From start to the move that ended it, plus the run's `hintMs` a hint.
     public let timeMs: Int
     public let hints: Int
     public let progress: Double
@@ -74,10 +74,15 @@ public struct DailyStart: Sendable, Hashable, Codable {
     /// Set once the run has ended: show the end screen.
     public let result: DailyResult?
     public let closesAt: Int64
+    /// What one hint adds to the run's time: 30 seconds, or 0 under Nine Lives' `"lives"` rules.
+    /// A server before this field always added 30 seconds.
+    public let hintMs: Int
+
+    public static let firstHintMs = 30_000
 
     public init(
         run: String, game: String, date: String, number: Int, level: Int, startedAt: Int64, now: Int64, puzzle: DailyJSON,
-        state: DailyJSON, seq: Int, hints: Int, result: DailyResult?, closesAt: Int64
+        state: DailyJSON, seq: Int, hints: Int, result: DailyResult?, closesAt: Int64, hintMs: Int = DailyStart.firstHintMs
     ) {
         self.run = run
         self.game = game
@@ -92,6 +97,26 @@ public struct DailyStart: Sendable, Hashable, Codable {
         self.hints = hints
         self.result = result
         self.closesAt = closesAt
+        self.hintMs = hintMs
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        run = try c.decode(String.self, forKey: .run)
+        game = try c.decode(String.self, forKey: .game)
+        date = try c.decode(String.self, forKey: .date)
+        number = try c.decode(Int.self, forKey: .number)
+        level = try c.decode(Int.self, forKey: .level)
+        startedAt = try c.decode(Int64.self, forKey: .startedAt)
+        now = try c.decode(Int64.self, forKey: .now)
+        puzzle = try c.decode(DailyJSON.self, forKey: .puzzle)
+        state = try c.decode(DailyJSON.self, forKey: .state)
+        seq = try c.decode(Int.self, forKey: .seq)
+        hints = try c.decode(Int.self, forKey: .hints)
+        result = try c.decodeIfPresent(DailyResult.self, forKey: .result)
+        closesAt = try c.decode(Int64.self, forKey: .closesAt)
+        // Lenient: missing, or not a whole number of milliseconds, is the first rules' 30 seconds.
+        hintMs = (try? c.decodeIfPresent(Int.self, forKey: .hintMs)).flatMap { $0 }.map { max(0, $0) } ?? Self.firstHintMs
     }
 }
 

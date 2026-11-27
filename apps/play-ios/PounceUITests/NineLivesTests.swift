@@ -1,10 +1,11 @@
 import XCTest
 
 /// Nine Lives end to end against a dev server with `DAILY=on` (G1 uses its own, `wrangler dev
-/// --port 8802`; point the runner at it with `TEST_RUNNER_POUNCE_API_BASE_URL`). The app never
-/// has the solution, so the test reads today's givens off the screen in one snapshot and solves
-/// them itself, then plays: a hint, a clash and its fix, and every other cell, to the end screen.
-/// Skipped when the server has the Dish off.
+/// --port 8802`; point the runner at it with `TEST_RUNNER_POUNCE_API_BASE_URL`), on the lives rules
+/// (docs/daily-protocol.md, "## Nine Lives"). The app never has the solution, so the test reads
+/// today's givens off the screen in one snapshot and solves them itself, then plays. Each test
+/// starts a fresh player (`-uitest-reset`), so each gets the day's run new. Skipped when the server
+/// has the Dish off.
 @MainActor
 final class NineLivesTests: XCTestCase {
     /// No sound out loud on the Mac running the tests (a bare "NO" would be read as a string).
@@ -28,6 +29,16 @@ final class NineLivesTests: XCTestCase {
         XCTAssertTrue(el(app, "nine-lives-cell-80").waitForExistence(timeout: Live.t(15)), "the grid never came up")
     }
 
+    /// `speed`: the app's pace (`Pace`); 1 to see the board's last word at its real length.
+    private func launch(speed: Double? = nil) throws -> XCUIApplication {
+        let app = Live.app()
+        if let speed { app.launchArguments = Live.arguments(speed: speed) + ["-uitest-reset"] }
+        app.launchArguments += ["-seed-people"] + Self.quiet
+        app.launch()
+        try open(app)
+        return app
+    }
+
     /// Every cell's digit (0: empty), read in one snapshot of the screen.
     private func cells(_ app: XCUIApplication) throws -> (digits: [Int], values: [String]) {
         var digits = [Int](repeating: -1, count: 81)
@@ -36,7 +47,8 @@ final class NineLivesTests: XCTestCase {
             if s.identifier.hasPrefix("nine-lives-cell-"), let i = Int(s.identifier.dropFirst("nine-lives-cell-".count)) {
                 let value = s.value as? String ?? ""
                 values[i] = value
-                digits[i] = Int(value.prefix { $0.isNumber }) ?? 0
+                // A wrong number shown, or the solution shown, isn't the board's.
+                digits[i] = value.hasSuffix("wrong") || value.hasSuffix("answer") ? 0 : Int(value.prefix { $0.isNumber }) ?? 0
             }
             s.children.forEach(walk)
         }
@@ -45,17 +57,34 @@ final class NineLivesTests: XCTestCase {
         return (digits, values)
     }
 
+    /// A digit that isn't `cell`'s answer, whose key is still awake.
+    private func wrongDigit(_ cell: Int, _ board: [Int], _ solution: [Int]) -> Int {
+        (1...9).first { d in d != solution[cell] && board.filter { $0 == d }.count < 9 }!
+    }
+
+    private func lives(_ app: XCUIApplication) -> String? { value(el(app, "nine-lives-lives")) }
+
+    /// Plays `digit` in `cell` and waits for the server's verdict to show.
+    private func enter(_ app: XCUIApplication, _ cell: Int, _ digit: Int, wrong: Bool, file: StaticString = #filePath, line: UInt = #line) {
+        el(app, "nine-lives-cell-\(cell)").tap()
+        el(app, "nine-lives-key-\(digit)").tap()
+        let shown = until(10) {
+            let v = self.value(self.el(app, "nine-lives-cell-\(cell)")) ?? ""
+            return wrong ? v.hasSuffix("wrong") || v.hasSuffix("answer") : v == "\(digit)"
+        }
+        XCTAssertTrue(shown, "cell \(cell) never showed \(digit) as \(wrong ? "wrong" : "right")", file: file, line: line)
+    }
+
     func testNineLivesPlaysToTheEnd() throws {
-        let app = Live.app()
-        app.launchArguments += ["-seed-people"] + Self.quiet
-        app.launch()
-        try open(app)
+        let app = try launch()
         XCTAssertTrue(el(app, "daily.clock").exists, "no clock")
+        XCTAssertEqual(lives(app), "3 of 3")
+        XCTAssertEqual(value(el(app, "nine-lives-hint")), "3 left")
 
         let start = try cells(app).digits
-        let solution = try XCTUnwrap(Sudoku.solve(start), "today's givens have no solution")
+        let solution = try XCTUnwrap(GridSolver.solve(start), "today's givens have no solution")
 
-        // A hint fills one open cell with its answer, from the server, and locks it.
+        // A hint fills one open cell with its answer, from the server, and locks it. It costs no life.
         el(app, "nine-lives-hint").tap()
         var hinted = -1
         XCTAssertTrue(until(10) {
@@ -64,24 +93,75 @@ final class NineLivesTests: XCTestCase {
         }, "the hint filled nothing")
         let afterHint = try cells(app).digits
         XCTAssertEqual(afterHint[hinted], solution[hinted], "the hint isn't the answer")
+        XCTAssertTrue(until(5) { self.value(self.el(app, "nine-lives-hint")) == "2 left" }, "the hint count didn't drop")
+        XCTAssertEqual(lives(app), "3 of 3")
 
         let open = (0..<81).filter { afterHint[$0] == 0 }
-        // A clash is legal and shows: a digit its row already has.
+        // A wrong number shows red in its cell and costs a life.
         let first = open[0]
-        let rowDigit = try XCTUnwrap((0..<9).map { afterHint[first / 9 * 9 + $0] }.first { $0 != 0 })
-        el(app, "nine-lives-cell-\(first)").tap()
-        el(app, "nine-lives-key-\(rowDigit)").tap()
-        XCTAssertTrue(until(5) { (self.value(self.el(app, "nine-lives-cell-\(first)")) ?? "").hasSuffix("clash") }, "no clash shown")
+        let bad = wrongDigit(first, afterHint, solution)
+        enter(app, first, bad, wrong: true)
+        XCTAssertTrue(until(5) { self.lives(app) == "2 of 3" }, "no life lost: \(lives(app) ?? "none")")
+        // Erase takes it out on the phone; the same wrong number again costs nothing more.
+        el(app, "nine-lives-erase").tap()
+        XCTAssertTrue(until(5) { self.value(self.el(app, "nine-lives-cell-\(first)")) == "Empty" }, "erase left the wrong number")
+        enter(app, first, bad, wrong: true)
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertEqual(lives(app), "2 of 3", "the same wrong number cost a second life")
 
-        // Everything else, right: the first cell is still selected, so its right digit replaces the clash.
+        // Everything else, right: the first cell's right digit replaces the wrong one. A right one locks.
         for (k, i) in open.enumerated() {
-            if k > 0 { el(app, "nine-lives-cell-\(i)").tap() }
+            el(app, "nine-lives-cell-\(i)").tap()
             el(app, "nine-lives-key-\(solution[i])").tap()
+            if k == 0 {
+                XCTAssertTrue(until(5) { self.value(self.el(app, "nine-lives-cell-\(i)")) == "\(solution[i])" }, "no right digit")
+                el(app, "nine-lives-erase").tap()
+                XCTAssertEqual(value(el(app, "nine-lives-cell-\(i)")), "\(solution[i])", "a right digit was erased")
+            }
         }
 
         XCTAssertTrue(el(app, "daily.end").waitForExistence(timeout: Live.t(15)), "the run never ended")
         XCTAssertEqual(el(app, "daily.end.headline").label, "Solved")
         XCTAssertTrue(el(app, "daily.end.share").exists, "no share")
+    }
+
+    /// Three wrong numbers end the run: "Out of lives", the solution fills in, then the end screen.
+    func testThreeWrongNumbersFailAndShowTheSolution() throws {
+        // At the real pace, so the board's last word (about 2.6 seconds) is long enough to read.
+        let app = try launch(speed: 1)
+        let start = try cells(app).digits
+        let solution = try XCTUnwrap(GridSolver.solve(start))
+        let open = (0..<81).filter { start[$0] == 0 }
+        for (k, cell) in open.prefix(2).enumerated() {
+            enter(app, cell, wrongDigit(cell, start, solution), wrong: true)
+            XCTAssertTrue(until(5) { self.lives(app) == "\(2 - k) of 3" }, "lives: \(lives(app) ?? "none")")
+        }
+        el(app, "nine-lives-cell-\(open[2])").tap()
+        el(app, "nine-lives-key-\(wrongDigit(open[2], start, solution))").tap()
+        XCTAssertTrue(el(app, "nine-lives-out").waitForExistence(timeout: Live.t(5)), "no Out of lives")
+        // The board shows the solution, kindly, before the end screen.
+        let shown = try cells(app).values
+        let answers = open.filter { shown[$0] == "\(solution[$0]), answer" }
+        XCTAssertEqual(answers.count, open.count, "the solution didn't fill in: \(answers.count) of \(open.count)")
+        XCTAssertTrue(el(app, "daily.end").waitForExistence(timeout: Live.t(15)), "the run never ended")
+        XCTAssertEqual(el(app, "daily.end.headline").label, "Out of lives")
+        XCTAssertFalse(el(app, "daily.end.result").exists, "Out of lives said twice")
+    }
+
+    /// Three hints a day, none of them costing a life; then the Hint button is spent.
+    func testThreeHintsThenTheButtonIsSpent() throws {
+        let app = try launch()
+        let hint = el(app, "nine-lives-hint")
+        for left in [2, 1, 0] {
+            hint.tap()
+            XCTAssertTrue(until(10) { self.value(hint) == "\(left) left" }, "hints: \(value(hint) ?? "none")")
+        }
+        XCTAssertEqual(lives(app), "3 of 3")
+        XCTAssertEqual(try cells(app).values.filter { $0.hasSuffix("hint") }.count, 3)
+        XCTAssertFalse(hint.isEnabled, "the Hint button still works with none left")
+        hint.tap()
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertEqual(try cells(app).values.filter { $0.hasSuffix("hint") }.count, 3, "a fourth hint came")
     }
 
     /// The Nine Lives screen with its clock running, a few moves in: nothing reads the screen while
@@ -93,7 +173,7 @@ final class NineLivesTests: XCTestCase {
         app.launch()
         try open(app)
         let start = try cells(app).digits
-        let solution = try XCTUnwrap(Sudoku.solve(start))
+        let solution = try XCTUnwrap(GridSolver.solve(start))
         for i in (0..<81).filter({ start[$0] == 0 }).prefix(4) {
             el(app, "nine-lives-cell-\(i)").tap()
             el(app, "nine-lives-key-\(solution[i])").tap()
@@ -122,9 +202,10 @@ final class NineLivesTests: XCTestCase {
 }
 
 /// Screenshots of every screen Nine Lives touches, for the PR: Home and the Dish with Nine Lives on
-/// them (demo data), and against the dev server the puzzle midway (notes, a hint, a clash), full
-/// with a mistake ("Not quite"), and its end. Skipped unless the runner sets `DAILY_SHOTS_DIR`. An
-/// iPad takes each in portrait and landscape; a phone also takes the biggest text.
+/// them (demo data), and against the dev server the puzzle midway (notes, a hint, a wrong number
+/// and a life gone), every hint used, out of lives with the solution filling in, and its end.
+/// Skipped unless the runner sets `DAILY_SHOTS_DIR`. An iPad takes each in portrait and landscape;
+/// a phone also takes the biggest text.
 @MainActor
 final class NineLivesShotTests: XCTestCase {
     private static let big = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
@@ -146,9 +227,10 @@ final class NineLivesShotTests: XCTestCase {
             to: URL(fileURLWithPath: dir).appendingPathComponent("\(device)-\(name)\(suffix).png"))
     }
 
-    private func launch(_ args: [String]) -> XCUIApplication {
+    /// `speed` 1 for the puzzle: the board's last word out of lives lasts its real length.
+    private func launch(_ args: [String], speed: Double = 4) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = Live.arguments(speed: 4) + ["-uitest-reset", "-seed-people"] + NineLivesTests.quiet + args
+        app.launchArguments = Live.arguments(speed: speed) + ["-uitest-reset", "-seed-people"] + NineLivesTests.quiet + args
         app.launchEnvironment["POUNCE_API_BASE_URL"] = Live.baseURL
         app.launch()
         return app
@@ -175,17 +257,17 @@ final class NineLivesShotTests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
     }
 
-    /// Today's puzzle against the dev server: midway, Not quite, and the end.
+    /// Today's puzzle against the dev server: midway, hints spent, out of lives, and the end.
     private func puzzle(big: Bool) throws {
         let prefix = big ? "nine-lives-big-text" : "nine-lives"
-        let app = launch(big ? Self.big : [])
+        let app = launch(big ? Self.big : [], speed: 1)
         XCTAssertTrue(el(app, "screen-home").waitForExistence(timeout: Live.t(20)), "no Home")
         let treat = el(app, "home.dish.nine-lives")
         guard treat.waitForExistence(timeout: Live.t(20)) else { throw XCTSkip("no Nine Lives on \(Live.baseURL)") }
         treat.tap()
         XCTAssertTrue(el(app, "nine-lives-cell-80").waitForExistence(timeout: Live.t(15)), "no grid")
         let givens = try NineLivesBoardReader.digits(app)
-        let solution = try XCTUnwrap(Sudoku.solve(givens))
+        let solution = try XCTUnwrap(GridSolver.solve(givens))
         let open = (0..<81).filter { givens[$0] == 0 }
         let half = open.count / 2
         for i in open.prefix(half) {
@@ -194,7 +276,7 @@ final class NineLivesShotTests: XCTestCase {
         }
         el(app, "nine-lives-hint").tap()
         Thread.sleep(forTimeInterval: 1.5)
-        // Notes in two cells, then a clash selected.
+        // Notes in two cells, then a wrong number, selected.
         let rest = try NineLivesBoardReader.digits(app)
         let free = (0..<81).filter { rest[$0] == 0 }
         el(app, "nine-lives-notes").tap()
@@ -203,23 +285,28 @@ final class NineLivesShotTests: XCTestCase {
             for d in notes { el(app, "nine-lives-key-\(d)").tap() }
         }
         el(app, "nine-lives-notes").tap()
-        let clash = free[0]
-        // A digit its row already has, whose key is still awake.
-        let rowDigit = try XCTUnwrap((0..<9).map { rest[clash / 9 * 9 + $0] }.first { d in d != 0 && rest.filter { $0 == d }.count < 9 })
-        el(app, "nine-lives-cell-\(clash)").tap()
-        el(app, "nine-lives-key-\(rowDigit)").tap()
-        Thread.sleep(forTimeInterval: 1)
+        func wrong(_ cell: Int) -> Int { (1...9).first { d in d != solution[cell] && rest.filter { $0 == d }.count < 9 }! }
+        el(app, "nine-lives-cell-\(free[0])").tap()
+        el(app, "nine-lives-key-\(wrong(free[0]))").tap()
+        Thread.sleep(forTimeInterval: 1.5)
         save("\(prefix)-midway")
-        // Everything else right, the clash left in: full with a mistake is Not quite.
-        for i in free.dropFirst() {
-            el(app, "nine-lives-cell-\(i)").tap()
-            el(app, "nine-lives-key-\(solution[i])").tap()
-        }
-        XCTAssertTrue(el(app, "nine-lives-not-quite").waitForExistence(timeout: Live.t(5)))
+        // Every hint used, a second life gone.
+        el(app, "nine-lives-hint").tap()
         Thread.sleep(forTimeInterval: 1)
-        save("\(prefix)-not-quite")
-        el(app, "nine-lives-cell-\(clash)").tap()
-        el(app, "nine-lives-key-\(solution[clash])").tap()
+        el(app, "nine-lives-hint").tap()
+        Thread.sleep(forTimeInterval: 1)
+        let later = try NineLivesBoardReader.digits(app)
+        let left = (0..<81).filter { later[$0] == 0 && $0 != free[0] }
+        el(app, "nine-lives-cell-\(left[2])").tap()
+        el(app, "nine-lives-key-\(wrong(left[2]))").tap()
+        Thread.sleep(forTimeInterval: 1.5)
+        save("\(prefix)-hints-spent")
+        // The third: out of lives, and the solution fills in.
+        el(app, "nine-lives-cell-\(left[4])").tap()
+        el(app, "nine-lives-key-\(wrong(left[4]))").tap()
+        XCTAssertTrue(el(app, "nine-lives-out").waitForExistence(timeout: Live.t(5)), "no Out of lives")
+        Thread.sleep(forTimeInterval: 1.2)
+        save("\(prefix)-out")
         XCTAssertTrue(el(app, "daily.end").waitForExistence(timeout: Live.t(15)), "the run never ended")
         Thread.sleep(forTimeInterval: 2)
         save("\(prefix)-end")
@@ -244,7 +331,7 @@ enum NineLivesBoardReader {
 }
 
 /// A plain backtracking solver: the test's own, because no client ever gets the solution.
-enum Sudoku {
+enum GridSolver {
     static func solve(_ givens: [Int]) -> [Int]? {
         var grid = givens
         func fits(_ i: Int, _ d: Int) -> Bool {

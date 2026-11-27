@@ -25,6 +25,9 @@ struct DailyPuzzleScreen: View {
     @State private var hints = 0
     @State private var link: DailyLink = .ok
     @State private var result: DailyResult?
+    /// The run has ended and the board is having its last word (`DailyGameView.endHold`): the
+    /// clock stops and give up goes, then the end screen.
+    @State private var ending: DailyResult?
     @State private var onTV = false
     @State private var askGiveUp = false
     @State private var givingUp = false
@@ -52,6 +55,7 @@ struct DailyPuzzleScreen: View {
             .animation(.spring(duration: 0.4, bounce: 0.3).paced, value: result)
             .animation(.easeOut(duration: 0.2).paced, value: link)
             .frameGate()
+            .tipHost(.daily)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("screen-daily")
     }
@@ -152,7 +156,7 @@ struct DailyPuzzleScreen: View {
             .accessibilityElement(children: .combine)
             Spacer(minLength: 4)
             clock
-            if case .playing(let session, _) = phase, result == nil {
+            if case .playing(let session, _) = phase, result == nil, ending == nil {
                 if model.daily.tvs > 0 { tvSwitch(session) }
                 giveUpButton
             }
@@ -168,8 +172,8 @@ struct DailyPuzzleScreen: View {
     @ViewBuilder private var clock: some View {
         if case .playing(let session, _) = phase {
             Group {
-                if let result {
-                    clockText(DailyClock.format(ms: Int64(result.timeMs)))
+                if let done = result ?? ending {
+                    clockText(DailyClock.format(ms: Int64(done.timeMs)))
                 } else {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         clockText(DailyClock.format(ms: session.clock.elapsedMs(at: context.date, hints: hints)))
@@ -256,7 +260,7 @@ struct DailyPuzzleScreen: View {
                 switch event {
                 case .hinted(_, let count, _): hints = count
                 case .resync(let start): hints = start.hints
-                case .ended(let ended): finish(ended)
+                case .ended(let ended): await finish(ended, hold: playable.hold(ended))
                 case .link(let next): link = next
                 case .accepted: break
                 }
@@ -269,9 +273,14 @@ struct DailyPuzzleScreen: View {
         }
     }
 
-    private func finish(_ ended: DailyResult) {
-        guard result == nil else { return }
+    private func finish(_ ended: DailyResult, hold: Duration) async {
+        guard result == nil, ending == nil else { return }
+        if hold > .zero {
+            ending = ended
+            try? await Task.sleep(for: Pace.duration(hold))
+        }
         result = ended
+        ending = nil
         onTV = false
         model.daily.record(ended)
         if ended.outcome.finished {

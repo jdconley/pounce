@@ -118,7 +118,9 @@ final class TipCenter {
 
     /// Something happened that a tip waits for.
     func note(_ event: TipEvent) {
+        guard !events.contains(event) else { return }
         events.insert(event)
+        schedule(after: Self.settle)
     }
 
     /// A control was used: what it teaches is learned, for whoever's screen it is.
@@ -246,6 +248,8 @@ enum UITipCopy {
         case .tableView: String(localized: "Your cards are here. The table is on the TV.", comment: "Tip on a table a TV shows: the Cards/Table switch, the first time the phone shows just its cards")
         case .tilesView: String(localized: "Your cards are here. The table is on the TV.", comment: "Tip on a table a TV shows: the Cards/Table switch, the first time the phone shows just its cards")
         case .dishFirst: String(localized: "Four new puzzles every day.", comment: "Tip on the Daily Dish, first visit: the puzzle cards")
+        case .nineLivesLives: String(localized: "Wrong numbers cost a life.", comment: "Tip in Nine Lives, at the three cat heads, after the first wrong number")
+        case .nineLivesHints: String(localized: "Three hints a day.", comment: "Tip in Nine Lives, at the Hint button, after the first hint")
         case .lobbyRules: String(localized: "Pick the rules your family plays.", comment: "Tip in the Birdwatch lobby: the three rule-set pills")
         case .birdSign: String(localized: "Each cat's bid shows on its sign.", comment: "Tip at Birdwatch's table: a cat's bid sign")
         case .birdDimmed: String(localized: "Dim cards can't be played. Follow suit.", comment: "Tip at Birdwatch's table: a dimmed card in your hand")

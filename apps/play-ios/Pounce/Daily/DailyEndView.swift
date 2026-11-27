@@ -36,10 +36,16 @@ struct DailyEndView: View {
             VStack(spacing: roomy ? 24 : 18) {
                 DailyTreat(game: game, side: roomy ? 110 : 84, done: result.outcome.finished)
                     .padding(.top, 12)
-                OutlinedText(headline, size: roomy ? 44 : 34, fill: result.outcome.finished ? Palette.lime : .white, width: 4)
-                    .accessibilityIdentifier("daily.end.headline")
-                OutlinedText(game.summary(result), size: roomy ? 64 : 50, fill: Palette.yellow, width: 5)
-                    .accessibilityIdentifier("daily.end.result")
+                if game.summary(result) == headline {
+                    // "Out of lives", "Gave up": the result is the headline, said once, big.
+                    OutlinedText(headline, size: roomy ? 64 : 50, fill: Palette.yellow, width: 5)
+                        .accessibilityIdentifier("daily.end.headline")
+                } else {
+                    OutlinedText(headline, size: roomy ? 44 : 34, fill: result.outcome.finished ? Palette.lime : .white, width: 4)
+                        .accessibilityIdentifier("daily.end.headline")
+                    OutlinedText(game.summary(result), size: roomy ? 64 : 50, fill: Palette.yellow, width: 5)
+                        .accessibilityIdentifier("daily.end.result")
+                }
                 if let detail = share.detail {
                     Text(verbatim: detail)
                         .font(.system(size: roomy ? 20 : 16, weight: .heavy, design: .rounded))
@@ -63,7 +69,10 @@ struct DailyEndView: View {
         switch result.outcome {
         case .solved: String(localized: "Solved", comment: "Daily end: the puzzle was solved")
         case .done: String(localized: "Fort done", comment: "Daily end: Box Fort's run ended")
-        case .missed: String(localized: "Missed", comment: "Daily end: Sniff's six guesses ran out")
+        case .missed:
+            game.id == DailyCatalog.nineLives.id
+                ? String(localized: "Out of lives", comment: "Daily end: Nine Lives' third wrong number")
+                : String(localized: "Missed", comment: "Daily end: Sniff's six guesses ran out")
         case .gaveUp: String(localized: "Gave up", comment: "Daily end: the player gave up")
         case .closed: String(localized: "Out of time", comment: "Daily end: the day ended first")
         case .other: String(localized: "Done", comment: "Daily end: an outcome this app doesn't know")

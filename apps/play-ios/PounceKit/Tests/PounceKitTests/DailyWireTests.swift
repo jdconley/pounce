@@ -130,5 +130,35 @@ enum DailyFixtures {
         #expect(DailyCatalog.catNap.line(r(.gaveUp)) == "Cat Nap 12: Gave up")
         #expect(DailyCatalog.boxFort.line(r(.done, points: 1240)) == "Box Fort 12: 1,240 points")
         #expect(DailyCatalog.sniff.short(r(.solved, guesses: 3)) == "3/6")
+        // Nine Lives' third wrong number: "Out of lives". Sniff keeps its own words.
+        #expect(DailyCatalog.nineLives.line(r(.missed)) == "Nine Lives 12: Out of lives")
+        #expect(DailyCatalog.nineLives.short(r(.missed)) == "Out of lives")
+        #expect(DailyCatalog.sniff.short(r(.missed, guesses: 6)) == "X/6")
+        #expect(DailyCatalog.catNap.summary(r(.missed)) == "Missed")
+        #expect(DailyCatalog.nineLives.rules == "lives" && DailyCatalog.sniff.rules == nil)
+    }
+
+    @Test func startReadsHintMsLeniently() throws {
+        func start(_ extra: String) throws -> DailyStart {
+            let json = """
+                {"run":"r","game":"nine-lives","date":"2026-11-23","number":1,"level":1,"startedAt":1,"now":1,
+                 "puzzle":{},"state":{},"seq":0,"hints":0,"result":null,"closesAt":2\(extra)}
+                """
+            return try JSONDecoder().decode(DailyStart.self, from: Data(json.utf8))
+        }
+        // A server before the field: 30 seconds a hint.
+        #expect(try start("").hintMs == 30_000)
+        #expect(try start(#","hintMs":0"#).hintMs == 0)
+        #expect(try start(#","hintMs":30000"#).hintMs == 30_000)
+        #expect(try start(#","hintMs":"soon""#).hintMs == 30_000)
+        #expect(try start(#","hintMs":-5"#).hintMs == 0)
+    }
+
+    @Test func startAsksForRulesInItsBody() throws {
+        // The body the client sends: `{ "rules": "lives" }`, or none.
+        let body: [String: String]? = DailyCatalog.nineLives.rules.map { ["rules": $0] }
+        let encoder = JSONEncoder()
+        #expect(String(data: try encoder.encode(body), encoding: .utf8) == #"{"rules":"lives"}"#)
+        #expect(DailyCatalog.boxFort.rules == nil)
     }
 }

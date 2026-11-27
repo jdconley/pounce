@@ -9,6 +9,9 @@ import Foundation
 /// The daily routes. A 404 from `start` or `board` means the server has the Dish off: hide it.
 public protocol DailyService: Sendable {
     func start(game: String, person: String?) async throws -> DailyStart
+    /// The same, asking for a game's `rules` at the run's first start (`{ "rules": "lives" }`).
+    /// A service that knows one set of rules leaves it to the default, which ignores them.
+    func start(game: String, person: String?, rules: String?) async throws -> DailyStart
     func moves(run: String, body: DailyMovesBody, person: String?) async throws -> DailyMovesAnswer
     /// `hints`: the hints used so far, so a resent hint costs nothing more.
     func hint(run: String, hints: Int, person: String?) async throws -> DailyMovesAnswer
@@ -22,6 +25,12 @@ public protocol DailyService: Sendable {
     func unlinkBoard(person: String?) async throws
 }
 
+extension DailyService {
+    public func start(game: String, person: String?, rules: String?) async throws -> DailyStart {
+        try await start(game: game, person: person)
+    }
+}
+
 extension APIClient: DailyService {
     private static func who(_ person: String?) -> [URLQueryItem] {
         person.map { [URLQueryItem(name: "person", value: $0)] } ?? []
@@ -32,7 +41,12 @@ extension APIClient: DailyService {
     }
 
     public func start(game: String, person: String?) async throws -> DailyStart {
-        let data = try await authenticated("POST", "/v1/daily/\(Self.path(game))/start", body: nil, query: Self.who(person))
+        try await start(game: game, person: person, rules: nil)
+    }
+
+    public func start(game: String, person: String?, rules: String?) async throws -> DailyStart {
+        let body: [String: String]? = rules.map { ["rules": $0] }
+        let data = try await authenticated("POST", "/v1/daily/\(Self.path(game))/start", body: body, query: Self.who(person))
         return try decode(DailyStart.self, from: data, status: 200)
     }
 
@@ -89,10 +103,12 @@ extension APIClient: DailyService {
 
 // MARK: the clock
 
-/// The run's clock is the server's: from its start to now, plus 30 seconds a hint. No pause.
-/// Counted locally, corrected by how far this device's clock is from the server's at start.
+/// The run's clock is the server's: from its start to now, plus the run's `hintMs` a hint (30
+/// seconds, or none under Nine Lives' lives). No pause. Counted locally, corrected by how far this
+/// device's clock is from the server's at start.
 public struct DailyClock: Sendable, Hashable {
-    public static let hintPenaltyMs: Int64 = 30_000
+    /// What one hint adds, from the start answer.
+    public let hintMs: Int64
 
     /// Epoch ms, the server's.
     public let startedAt: Int64
@@ -104,6 +120,7 @@ public struct DailyClock: Sendable, Hashable {
     public init(start: DailyStart, received: Date = Date()) {
         startedAt = start.startedAt
         closesAt = start.closesAt
+        hintMs = Int64(start.hintMs)
         skewMs = start.now - Int64((received.timeIntervalSince1970 * 1000).rounded())
     }
 
@@ -112,7 +129,7 @@ public struct DailyClock: Sendable, Hashable {
 
     /// The time the server would count at `date`, with `hints` used: never negative.
     public func elapsedMs(at date: Date, hints: Int) -> Int64 {
-        max(0, serverMs(at: date) - startedAt) + Int64(hints) * Self.hintPenaltyMs
+        max(0, serverMs(at: date) - startedAt) + Int64(hints) * hintMs
     }
 
     /// Milliseconds left before the run closes.
@@ -212,6 +229,8 @@ public actor DailyRunSession {
     public nonisolated let start: DailyStart
     public nonisolated let clock: DailyClock
     public nonisolated let person: String?
+    /// The rules asked for at start (`DailyGameInfo.rules`), asked again on a resync.
+    public nonisolated let rules: String?
     public nonisolated var game: String { start.game }
 
     public private(set) var seq: Int
@@ -246,12 +265,13 @@ public actor DailyRunSession {
     /// `retry`: the first wait before a failed call is sent again (it doubles, up to 8 seconds).
     /// `timer`: the wall clock, or a test's.
     public init(
-        start: DailyStart, service: any DailyService, person: String?, received: Date = Date(), window: Duration = .seconds(1),
-        retry: Duration = .milliseconds(500), timer: any DailyTimer = DailyWallTimer()
+        start: DailyStart, service: any DailyService, person: String?, rules: String? = nil, received: Date = Date(),
+        window: Duration = .seconds(1), retry: Duration = .milliseconds(500), timer: any DailyTimer = DailyWallTimer()
     ) {
         self.start = start
         self.service = service
         self.person = person
+        self.rules = rules
         self.window = window
         self.retry = retry
         self.timer = timer
@@ -262,11 +282,13 @@ public actor DailyRunSession {
         progress = start.result?.progress ?? 0
     }
 
-    /// Starts (or resumes) today's run of `game`. Throws `APIError.notFound` when the server has
-    /// the Dish off or doesn't list the game.
+    /// Starts (or resumes) today's run of `game`, asking for the rules this app plays
+    /// (`DailyGameInfo.rules`; a resumed run keeps the rules it began with). Throws
+    /// `APIError.notFound` when the server has the Dish off or doesn't list the game.
     public static func begin(game: String, service: any DailyService, person: String?) async throws -> DailyRunSession {
-        let start = try await service.start(game: game, person: person)
-        return DailyRunSession(start: start, service: service, person: person)
+        let rules = DailyCatalog.info(game)?.rules
+        let start = try await service.start(game: game, person: person, rules: rules)
+        return DailyRunSession(start: start, service: service, person: person, rules: rules)
     }
 
     // MARK: listening
@@ -456,7 +478,7 @@ public actor DailyRunSession {
     /// Starts again (the same run comes back) and hands every game the server's state.
     private func resync() async {
         dropQueue()
-        guard let fresh = await call({ service, _, person in try await service.start(game: self.start.game, person: person) }) else { return }
+        guard let fresh = await call({ service, _, person in try await service.start(game: self.start.game, person: person, rules: self.rules) }) else { return }
         seq = fresh.seq
         hints = fresh.hints
         emit(.resync(fresh))

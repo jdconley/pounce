@@ -156,7 +156,10 @@ struct TVBoardState: Equatable, Sendable {
         switch r.outcome {
         case .gaveUp: return String(localized: "Gave up", comment: "TV board: a run given up")
         case .closed, .other: return String(localized: "Closed", comment: "TV board: a run left open until the day ended")
-        case .missed: return String(localized: "Missed", comment: "TV board: a Sniff run that ran out of guesses")
+        case .missed:
+            return r.game == DailyCatalog.nineLives.id
+                ? String(localized: "Out of lives", comment: "TV board: a Nine Lives run that ran out of lives")
+                : String(localized: "Missed", comment: "TV board: a Sniff run that ran out of guesses")
         case .solved, .done:
             if let points = r.points { return points.formatted(.number.locale(Locale(identifier: "en_US"))) }
             if let guesses = r.guesses { return String(localized: "\(guesses) of 6", comment: "TV board: Sniff guesses used") }

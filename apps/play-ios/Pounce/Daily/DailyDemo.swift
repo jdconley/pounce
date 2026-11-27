@@ -4,7 +4,8 @@
 
     /// `-demo-dish <fresh|some|done|long|off>`: the Dish fed from memory, no server, for screenshots
     /// and UI tests. `fresh`: nothing played, Grandpa playing. `some`: two of mine done. `done`:
-    /// all four done, the board full. `long`: long names and big numbers. `off`: the server has the
+    /// all four done, the board full. `long`: long names, big numbers and the longest words (my Nine
+    /// Lives out of lives). `off`: the server has the
     /// Dish off (a 404), so it hides. Every game the catalog knows shows, playable or not.
     enum DailyDemo {
         static func mode(arguments: [String]) -> String? {
@@ -51,7 +52,9 @@
                 game: "nine-lives", number: number,
                 rows: [
                     row("pr_kid", kid, 5, 1, result("nine-lives", .solved, ms: long ? 3_729_000 : 247_000, hints: 1)),
-                    mine ? row("me", me, 2, 2, result("nine-lives", .solved, ms: long ? 3_900_000 : 312_000)) : nil,
+                    mine
+                        ? row("me", me, 2, 2, long ? result("nine-lives", .missed, ms: 3_900_000, hints: 3) : result("nine-lives", .solved, ms: 312_000))
+                        : nil,
                 ].compactMap { $0 })
             let nap = DailyGameBoard(
                 game: "cat-nap", number: number,

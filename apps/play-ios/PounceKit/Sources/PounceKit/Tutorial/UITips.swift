@@ -13,6 +13,8 @@ public enum TipScreen: String, CaseIterable, Codable, Sendable {
     case table
     /// The Daily Dish screen (daily games design §7).
     case dish
+    /// A daily puzzle being played (the host around a game's board).
+    case daily
 }
 
 /// What makes a tip worth showing, beyond its control being on screen.
@@ -49,6 +51,10 @@ public enum TipEvent: String, Hashable, Codable, Sendable {
     case tumbleTrick
     /// Toy Tumble: junk started waiting in this player's meter.
     case tumbleJunk
+    /// Nine Lives: a wrong number cost a life.
+    case lifeLost
+    /// Nine Lives: a hint was used.
+    case hintUsed
 }
 
 /// Who a tip is for. Nil means anyone.
@@ -126,6 +132,9 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
     case tilesView = "ui.tiles.view"
     // The Daily Dish: its first visit
     case dishFirst = "ui.dish.first"
+    // Nine Lives: the first life lost, and the first hint used, each at its counter
+    case nineLivesLives = "ui.nineLives.lives"
+    case nineLivesHints = "ui.nineLives.hints"
     // Birdwatch: the lobby's rule sets, then the table's first hands (design §5.8)
     case lobbyRules = "ui.lobby.rules"
     case birdSign = "ui.bird.sign"
@@ -181,6 +190,9 @@ public enum UITip: String, CaseIterable, Codable, Sendable {
         case .tilesView: r(.tiles, "table.view", 101, .unseen(.tableView))
         // The first visit to the Dish: what it is. Playing any puzzle learns it.
         case .dishFirst: r(.dish, "dish.cards", 100, learnedBy: ["dish.play"])
+        // Nine Lives' counters, each the first time it changes: what it counts.
+        case .nineLivesLives: r(.daily, "nine-lives-lives", 100, .event(.lifeLost))
+        case .nineLivesHints: r(.daily, "nine-lives-hint", 90, .event(.hintUsed))
         // Only the host's pills are live; a tap on one learns it.
         case .lobbyRules: r(.lobby, "lobby.rules", 97, learnedBy: ["lobby.rules"])
         // Birdwatch's table, one at a time as each comes up: a bid, a card you can't play, trump,

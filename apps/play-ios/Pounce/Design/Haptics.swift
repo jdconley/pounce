@@ -19,6 +19,8 @@ protocol HapticPlaying: AnyObject {
     func success()
     /// A heavy hit (a pounce, a bad move).
     func thump()
+    /// A light "no": two quick taps (a wrong number in a daily puzzle).
+    func nope()
     /// Round or game won: a rolling burst.
     func celebrate()
     /// Your turn came: a knock-knock with a soft swell, unlike any move's feedback.
@@ -85,6 +87,10 @@ final class EngineHaptics: HapticPlaying {
             transient(0, intensity: 1, sharpness: 0.2),
             continuous(0.02, duration: 0.15, intensity: 0.6, sharpness: 0.1),
         ])
+    }
+
+    func nope() {
+        play([transient(0, intensity: 0.45, sharpness: 0.9), transient(0.09, intensity: 0.35, sharpness: 0.9)])
     }
 
     func celebrate() {
@@ -184,6 +190,7 @@ final class SilentHaptics: HapticPlaying {
     func drop() { played += 1 }
     func success() { played += 1 }
     func thump() { played += 1 }
+    func nope() { played += 1 }
     func celebrate() { played += 1 }
     func turn() { played += 1 }
 }

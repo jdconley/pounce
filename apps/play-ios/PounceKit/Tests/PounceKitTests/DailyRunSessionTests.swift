@@ -19,6 +19,8 @@ actor FakeDaily: DailyService {
     }
 
     var calls: [Call] = []
+    /// The `rules` each start asked for.
+    var startRules: [String?] = []
     var bodies: [DailyMovesBody] = []
     /// Answers for the moves route, in order; when empty, it accepts.
     var movesScript: [Result<DailyMovesAnswer, any Error>] = []
@@ -39,7 +41,12 @@ actor FakeDaily: DailyService {
     func setStart(_ start: DailyStart) { startAnswer = start }
 
     func start(game: String, person: String?) async throws -> DailyStart {
+        try await start(game: game, person: person, rules: nil)
+    }
+
+    func start(game: String, person: String?, rules: String?) async throws -> DailyStart {
         calls.append(.start)
+        startRules.append(rules)
         return startAnswer
     }
 
@@ -321,6 +328,27 @@ final class ManualTimer: DailyTimer {
             #expect(event == .ended(result))
             break
         }
+    }
+
+    @Test func nineLivesAsksForLivesAtStartAndOnAResync() async {
+        let fake = FakeDaily()
+        await fake.script([.success(.refused(.illegal, at: 0, seq: 0))])
+        let s = try? await DailyRunSession.begin(game: "nine-lives", service: fake, person: nil)
+        #expect(s?.rules == "lives")
+        await s?.send(move: Step(n: 1), urgent: true)
+        await s?.flush()
+        #expect(await fake.startRules == ["lives", "lives"])
+        // A game with one set of rules sends no body.
+        _ = try? await DailyRunSession.begin(game: "sniff", service: fake, person: nil)
+        #expect(await fake.startRules.last == .some(nil))
+    }
+
+    @Test func aHintCostsTheStartsHintMs() {
+        let free = DailyStart(
+            run: "r", game: "nine-lives", date: "2026-11-23", number: 1, level: 1, startedAt: 1_000_000, now: 1_000_000,
+            puzzle: .null, state: .null, seq: 0, hints: 0, result: nil, closesAt: 2_000_000, hintMs: 0)
+        let clock = DailyClock(start: free, received: Date(timeIntervalSince1970: 1000))
+        #expect(clock.elapsedMs(at: Date(timeIntervalSince1970: 1003), hints: 3) == 3000)
     }
 
     @Test func theClockIsTheServers() {
