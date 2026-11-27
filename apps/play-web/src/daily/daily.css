@@ -750,10 +750,12 @@
   min-height: 0;
 }
 
-/* Under the end, the board fades as one layer. */
+/* Under the end, the board fades as one layer. `--dd-end-wait`: a game's moment before the end
+   (Nine Lives filling in the solution), when the run ended while it was played. */
 .dd-stage.over {
   opacity: 0.3;
   pointer-events: none;
+  transition-delay: var(--dd-end-wait, 0ms);
 }
 
 .dd-end-scrim {
@@ -764,7 +766,7 @@
   padding: calc(var(--safe-top) + 16px) calc(var(--safe-right) + 16px) calc(var(--safe-bottom) + 16px) calc(var(--safe-left) + 16px);
   overflow-y: auto;
   background: rgba(27, 11, 58, 0.45);
-  animation: dd-fade 360ms 700ms var(--ease-out) both;
+  animation: dd-fade 360ms calc(700ms + var(--dd-end-wait, 0ms)) var(--ease-out) both;
 }
 
 .dd-end {
@@ -781,7 +783,7 @@
   background: linear-gradient(180deg, var(--c), var(--d));
   box-shadow: 0 8px 0 var(--ink), inset 0 4px 0 rgba(255, 255, 255, 0.35);
   text-align: center;
-  animation: dd-pop 520ms 760ms var(--ease-spring) both;
+  animation: dd-pop 520ms calc(760ms + var(--dd-end-wait, 0ms)) var(--ease-spring) both;
 }
 
 .dd-end h2 {

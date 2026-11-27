@@ -114,7 +114,7 @@ export function TvWatch(props: { watching: Watching; frame: Frame | undefined; e
         <div class="tv-watch-ended" role="status">
           <img class="tv-watch-ended-burst" src={art("sunburst")} alt="" aria-hidden="true" />
           <Cat cat={watching.cat} pose={ended.result.outcome === "solved" || ended.result.outcome === "done" ? "celebrate" : "idle"} size="calc(var(--u) * 260)" />
-          <p class="tv-watch-ended-title outlined">{ENDED_WORDS[ended.result.outcome]}</p>
+          <p class="tv-watch-ended-title outlined">{ended.result.game === "nine-lives" && ended.result.outcome === "missed" ? "Out of lives" : ENDED_WORDS[ended.result.outcome]}</p>
           {ended.result.outcome === "solved" || ended.result.outcome === "done" ? <p class="tv-watch-ended-result">{resultWords(ended.result)}</p> : null}
         </div>
       ) : null}

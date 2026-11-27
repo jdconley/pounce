@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { Run, type RunEvent, type StartAnswer } from "../src/daily/client";
+import { Run, startBody, startRun, type RunEvent, type StartAnswer } from "../src/daily/client";
 import { ApiError } from "../src/net/api";
 
 import { Clock, flush } from "./fake-socket";
@@ -203,6 +203,41 @@ describe("the run session", () => {
     expect(run.elapsedMs()).toBe(7000);
     await run.hint();
     expect(run.elapsedMs()).toBe(37_000);
+  });
+
+  test("a hint adds the start's hintMs: none under Nine Lives' lives", async () => {
+    const { clock, run } = setup([ok(0, { reveals: [{ n: 1 }] })], { ...START, hintMs: 0 });
+    clock.advance(2000);
+    await run.hint();
+    expect(run.elapsedMs()).toBe(7000);
+  });
+
+  test("Nine Lives asks for the lives rules at start, and on a resync; no other game does", async () => {
+    expect(startBody("nine-lives")).toEqual({ rules: "lives" });
+    for (const g of ["sniff", "cat-nap", "box-fort", "test"] as const) expect(startBody(g)).toBeUndefined();
+    const calls: Call[] = [];
+    const call = async (method: string, path: string, body?: unknown) => {
+      calls.push({ method, path, body });
+      return new Response(JSON.stringify({ ...START, game: path.includes("nine-lives") ? "nine-lives" : "sniff" }), { status: 200 });
+    };
+    const run = (await startRun("nine-lives", "pe_1", call))!;
+    await startRun("sniff", "pe_1", call);
+    expect(calls).toEqual([
+      { method: "POST", path: "/v1/daily/nine-lives/start?person=pe_1", body: { rules: "lives" } },
+      { method: "POST", path: "/v1/daily/sniff/start?person=pe_1", body: undefined },
+    ]);
+    expect(run.game).toBe("nine-lives");
+    // A stale batch resyncs with the same body (the server ignores it after the first start).
+    const nl = { ...START, game: "nine-lives" as const };
+    const r = setup([{ ok: false, error: "stale", at: 0, seq: 0 }, nl], nl);
+    void r.run.send(step(1), { urgent: true });
+    await flush();
+    await flush();
+    await flush();
+    expect(r.calls.map((c) => [c.path.split("?")[0], c.body])).toEqual([
+      [`/v1/daily/runs/${"R".repeat(43)}/moves`, { from: 0, moves: [step(1)] }],
+      ["/v1/daily/nine-lives/start", { rules: "lives" }],
+    ]);
   });
 
   test("a batch holds at most 100 moves", async () => {

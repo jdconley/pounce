@@ -19,18 +19,32 @@ export function clock(ms: number): string {
 
 const points = (n: number) => `${n.toLocaleString("en-US")} ${n === 1 ? "point" : "points"}`;
 
-/** A result in a few words: "4 of 6", "4:05", "1,240 points", "Missed". */
+/** How a run that didn't end solved ended, in a word or two: Nine Lives' miss is out of lives. */
+export function outcomeWords(r: Pick<DailyResult, "game" | "outcome">): string {
+  switch (r.outcome) {
+    case "solved":
+      return "Solved";
+    case "missed":
+      return r.game === "nine-lives" ? "Out of lives" : "Missed";
+    case "gaveUp":
+      return "Gave up";
+    case "closed":
+      return "Unfinished";
+    default:
+      return "Done";
+  }
+}
+
+/** A result in a few words: "4 of 6", "4:05", "1,240 points", "Missed", "Out of lives". */
 export function resultWords(r: DailyResult): string {
   if (typeof r.points === "number") return points(r.points);
   switch (r.outcome) {
     case "solved":
       return typeof r.guesses === "number" ? `${r.guesses} of 6` : clock(r.timeMs);
     case "missed":
-      return "Missed";
     case "gaveUp":
-      return "Gave up";
     case "closed":
-      return "Unfinished";
+      return outcomeWords(r);
     default:
       return clock(r.timeMs);
   }

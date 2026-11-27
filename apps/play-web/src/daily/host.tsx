@@ -66,4 +66,9 @@ export interface DailyGame<P = unknown, S = unknown, M = unknown, R = unknown> {
   Screen: DailyGameScreen<P, S, M, R>;
   /** The share card's grid for an ended run, from its final public state. Leave out for none. */
   share?: (state: S, result: DailyResult) => ShareGrid | null;
+  /**
+   * How long the board stays up, still and unfaded, before the end comes over it, when the run
+   * ends while it's being played (Nine Lives out of lives fills in the solution). Leave out for none.
+   */
+  endDelayMs?: (result: DailyResult) => number;
 }

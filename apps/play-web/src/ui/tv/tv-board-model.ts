@@ -139,7 +139,7 @@ export function clock(ms: number): string {
 export function resultWords(r: DailyResult): string {
   if (r.outcome === "gaveUp") return "Gave up";
   if (r.outcome === "closed") return "Closed";
-  if (r.outcome === "missed") return "Missed";
+  if (r.outcome === "missed") return r.game === "nine-lives" ? "Out of lives" : "Missed";
   if (r.points !== undefined) return r.points.toLocaleString("en-US");
   if (r.guesses !== undefined) return `${r.guesses} of 6`;
   return clock(r.timeMs);

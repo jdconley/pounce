@@ -11,7 +11,10 @@
  * - `subscribe` hears every authoritative answer: accepted batches and their reveals, hints, a
  *   resync (the server's state wins: redraw from it), and the result.
  * - The clock is the server's: `elapsedMs()` counts from `startedAt`, corrected by the server's
- *   `now` at start, plus 30 seconds a hint, as the result's `timeMs` will.
+ *   `now` at start, plus the start's `hintMs` a hint (30 seconds when it's missing), as the
+ *   result's `timeMs` will.
+ * - The rules: a game with more than one set asks for the ones this player plays at start
+ *   (`startBody`: Nine Lives' lives). The server fixes them at the run's first start.
  *
  * Network calls are fetches (never blocking); timers live here, in net code, never in screens.
  */
@@ -34,6 +37,8 @@ export type StartAnswer<P = unknown, S = unknown> = {
   hints: number;
   result: DailyResult | null;
   closesAt: number;
+  /** What one hint adds to the time: 30 s, or 0 under Nine Lives' lives. Older servers: missing. */
+  hintMs?: number;
 };
 
 /** `POST /v1/daily/runs/{run}/moves` (and hint, give up), 200. */
@@ -88,7 +93,7 @@ export interface RunSession<P = unknown, S = unknown, M = unknown, R = unknown> 
   subscribe(listener: (event: RunEvent<S, R>) => void): () => void;
   /** The server's clock now, in epoch ms. */
   serverNow(): number;
-  /** The run's time so far, as the server will count it: since `startedAt`, plus 30 s a hint. */
+  /** The run's time so far, as the server will count it: since `startedAt`, plus `hintMs` a hint. */
   elapsedMs(): number;
 }
 
@@ -111,7 +116,14 @@ export type RunDeps = {
 /** A path with the person's `?person=`. */
 export const dailyPath = (path: string, person: string): string => `${path}${path.includes("?") ? "&" : "?"}person=${encodeURIComponent(person)}`;
 
-const HINT_MS = 30_000;
+/** What a hint adds when the start doesn't say (a server before `hintMs`). */
+export const HINT_MS = 30_000;
+
+/**
+ * The start's body: the rules this player plays, for a game with more than one set. Nine Lives:
+ * three lives and three free hints (docs/daily-protocol.md "## Nine Lives"). Every other game: none.
+ */
+export const startBody = (game: DailyGameId): { rules: string } | undefined => (game === "nine-lives" ? { rules: "lives" } : undefined);
 const MAX_BATCH = 100;
 const BACKOFF = [250, 500, 1000, 2000, 4000];
 const TOO_SOON_MS = 500;
@@ -163,7 +175,7 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
 
   elapsedMs(): number {
     if (this.result) return this.result.timeMs;
-    return Math.max(0, this.serverNow() - this.start.startedAt) + this.hints * HINT_MS;
+    return Math.max(0, this.serverNow() - this.start.startedAt) + this.hints * (this.start.hintMs ?? HINT_MS);
   }
 
   send(move: M, options: SendOptions = {}): Promise<R | null> {
@@ -394,13 +406,14 @@ export class Run<P = unknown, S = unknown, M = unknown, R = unknown> implements 
     let fresh: StartAnswer<P, S> | null = null;
     for (let attempt = 0; !fresh && attempt < 6; attempt++) {
       try {
-        const res = await this.deps.call("POST", dailyPath(`/v1/daily/${this.game}/start`, this.deps.person));
+        const res = await this.deps.call("POST", dailyPath(`/v1/daily/${this.game}/start`, this.deps.person), startBody(this.game));
         fresh = (await res.json()) as StartAnswer<P, S>;
       } catch {
         await new Promise<void>((r) => this.setTimer(r, BACKOFF[Math.min(attempt, BACKOFF.length - 1)] as number));
       }
     }
     if (fresh) {
+      this.start = { ...this.start, hintMs: fresh.hintMs ?? this.start.hintMs };
       this.seq = fresh.seq;
       this.hints = fresh.hints;
       this.emit({ kind: "resync", state: fresh.state, seq: fresh.seq });
@@ -417,7 +430,7 @@ export async function startRun<P, S, M, R>(
   call: RunDeps["call"] = (m, p, b) => api.call(m, p, b),
 ): Promise<Run<P, S, M, R> | null> {
   try {
-    const res = await call("POST", dailyPath(`/v1/daily/${game}/start`, person));
+    const res = await call("POST", dailyPath(`/v1/daily/${game}/start`, person), startBody(game));
     return new Run<P, S, M, R>((await res.json()) as StartAnswer<P, S>, { call, person });
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null;
