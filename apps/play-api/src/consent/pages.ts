@@ -32,6 +32,7 @@ const NOTICE = `<h1>Notice to parents: notifications for a child</h1>
 </ul>
 <p>We collect this only with your consent, and use it only to send those notifications. Without your consent the child can still play, and we send the child's device nothing.</p>
 <p>We don't show any of it to anyone else, and we never sell or share it. Notifications pass through Apple, and the code to your phone passes through Twilio Verify; neither may use them for anything else. The child's name in Pounce is picked from a list of made-up cat names, nothing is public, and only people the child already plays with can see it. No text we send names the child.</p>
+<p>Children can draw in Purrtrait; drawings show only on the table's TV and are never kept.</p>
 
 <h2>How to say yes</h2>
 <p>Type the six-digit code from our text into Pounce. You can also ignore the text: then nothing changes, and your number is deleted after 30 minutes.</p>
