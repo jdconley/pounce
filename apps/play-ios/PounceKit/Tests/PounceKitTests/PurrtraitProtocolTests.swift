@@ -162,6 +162,17 @@ import Testing
         #expect(try fixture("error-no_screen") == .error(.noScreen))
     }
 
+    /// A dev server running its clock fast scales the times: `29702.97` ms still reads.
+    @Test func fractionalMillisecondsStillDecode() throws {
+        let near = try JSONDecoder().decode(RoomNear.self, from: Data(#"{"key":"22RFPDW2","code":"68H2D22R","expiresIn":29702.97}"#.utf8))
+        #expect(near.expiresIn == 29703)
+        var json = try #require(try Fixtures.purrtraitServerMessages().first { $0.name == "snapshot-drawing-guesser" }).json
+        json = json.replacingOccurrences(of: #""remainingMs":75000"#, with: #""remainingMs":74999.6"#)
+        #expect(json.contains("74999.6"))
+        guard case .snapshot(_, _, let room) = try Codec.decode(json) as ServerMessage else { Issue.record("not a snapshot"); return }
+        #expect(room.purrtrait?.remainingMs == 75000)
+    }
+
     @Test func anUnknownGroupOrEventIsNotABrokenRoom() throws {
         let json = #"{"t":"event","seq":3,"event":{"kind":"purrtrait","event":{"type":"confetti","drawer":0}}}"#
         #expect(try Codec.decode(json) == .event(seq: 3, event: .purrtrait(.unknown("confetti"))))

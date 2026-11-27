@@ -160,7 +160,7 @@ public struct PurrView: Codable, Equatable, Sendable {
         out = try c.decodeIfPresent([Bool].self, forKey: .out) ?? Array(repeating: false, count: seats)
         group = try c.decodeIfPresent(PurrGroup.self, forKey: .group)
         level = (try? c.decodeIfPresent(String.self, forKey: .level)).flatMap(PurrLevel.init(rawValue:))
-        remainingMs = try c.decodeIfPresent(Int.self, forKey: .remainingMs)
+        remainingMs = try c.decodeMillis(forKey: .remainingMs)
         paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? false
         turn = try c.decodeIfPresent(String.self, forKey: .turn) ?? ""
         last = try c.decodeIfPresent(PurrLast.self, forKey: .last)
@@ -229,7 +229,7 @@ public struct RoomNear: Codable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         key = try c.decode(String.self, forKey: .key)
         code = try c.decodeIfPresent(String.self, forKey: .code) ?? ""
-        expiresIn = try c.decodeIfPresent(Int.self, forKey: .expiresIn) ?? 30_000
+        expiresIn = try c.decodeMillis(forKey: .expiresIn) ?? 30_000
     }
 }
 
@@ -439,5 +439,14 @@ public enum InkOp: Codable, Equatable, Sendable {
         case .extend(_, let deltas): deltas.count
         case .undo, .clear: 0
         }
+    }
+}
+
+extension KeyedDecodingContainer {
+    /// A count of milliseconds: whole, as the server sends them, or with a fraction (a dev server
+    /// running its clock fast scales them), rounded. Nil when absent or null.
+    fileprivate func decodeMillis(forKey key: Key) throws -> Int? {
+        if let whole = try? decodeIfPresent(Int.self, forKey: key) { return whole }
+        return try decodeIfPresent(Double.self, forKey: key).map { Int($0.rounded()) }
     }
 }

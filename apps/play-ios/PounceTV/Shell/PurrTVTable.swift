@@ -32,6 +32,7 @@ struct PurrTVTable: View {
                         if view.phase == .reveal || view.phase == .over, let last = view.last {
                             PurrTVReveal(room: room, last: last)
                                 .frame(width: easelWidth, height: easelHeight)
+                                .compositingGroup()
                                 .transition(.scale(scale: 0.7).combined(with: .opacity))
                                 .id(view.turn)
                         }
@@ -159,6 +160,16 @@ private struct PurrTVTurn: View {
     let deadline: Date?
 
     var body: some View {
+        // The turn and its reveal are one layer each: the old one goes at once and the new one
+        // fades in whole, so the drawer's name never shows through the points.
+        panel
+            .compositingGroup()
+            .id(view.phase == .reveal ? "reveal \(view.turn)" : "turn \(view.turn)")
+            .transition(.asymmetric(insertion: .opacity, removal: .identity))
+            .frame(maxHeight: .infinity)
+    }
+
+    private var panel: some View {
         VStack(spacing: 36) {
             if let drawer = view.drawer, view.phase == .choosing || view.phase == .drawing {
                 let name = SeatInfo.name(room, drawer)
@@ -189,7 +200,6 @@ private struct PurrTVTurn: View {
                 }
             }
         }
-        .frame(maxHeight: .infinity)
     }
 }
 

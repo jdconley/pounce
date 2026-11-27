@@ -9,10 +9,10 @@ import PounceKit
 //        over "purrtrait over inkMessages=<n> points=<p> syncs=<s>". Fails if any snapshot carries a
 //        word or choices before the reveal.)
 //   pounce-e2e purrtrait join <CODE> --near <KEY or 8-char code> [--name Remote] [--cat 4]
-//                            [--draw 3] [--expect-refused] [--timeout 900]
+//                            [--draw 3] [--start N] [--expect-refused] [--timeout 900]
 //       (a phone that came from the TV's QR: sits down, and on its own turns picks the Easy word,
 //        draws `--draw` strokes and gives up. With --expect-refused, passes only when the room
-//        refuses the key: an old QR.)
+//        refuses the key: an old QR. With --start N, a host starts the game once N sit.)
 
 func purrtraitMode(_ plain: APIConfig, _ o: Options) async throws {
     let base = birdwatchConfig(plain)
@@ -48,6 +48,15 @@ func purrtraitMode(_ plain: APIConfig, _ o: Options) async throws {
         if let open = await phone.view.room.map({ TableModel(room: $0).takeableSeats.first }) ?? nil {
             try await claim(phone, seat: open, me)
             log("claimed seat \(open) as \(me.name)")
+        }
+        // `--start N`: the host starts the game once N players sit.
+        let startAt = o.int("start", 0)
+        if startAt > 0 {
+            try await wait(phone, "\(startAt) players", timeout: timeout) { v in
+                (v.room?.seats.filter { $0.kind == .human }.count ?? 0) >= startAt
+            }
+            try await phone.send(.start)
+            log("started")
         }
         try await playPurrtrait(phone, strokes: o.int("draw", 3), timeout: timeout)
         await phone.drop()
