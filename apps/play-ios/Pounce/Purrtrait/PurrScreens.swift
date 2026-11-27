@@ -284,6 +284,46 @@ struct PurrDrawView: View {
     }
 }
 
+/// A TV, drawn crisp at any size: a chunky violet set on little legs with two antennae, the
+/// drawer's cat on its teal screen.
+struct PurrTVGlyph: View {
+    let cat: Int?
+    var width: CGFloat = 210
+
+    var body: some View {
+        let h = width * 0.72
+        VStack(spacing: -width * 0.02) {
+            ZStack(alignment: .bottom) {
+                HStack(spacing: width * 0.18) {
+                    Capsule().fill(Palette.yellow).frame(width: width * 0.04, height: width * 0.2).rotationEffect(.degrees(-28))
+                    Capsule().fill(Palette.yellow).frame(width: width * 0.04, height: width * 0.2).rotationEffect(.degrees(28))
+                }
+            }
+            .frame(height: width * 0.16)
+            ZStack {
+                RoundedRectangle(cornerRadius: width * 0.12, style: .continuous)
+                    .fill(LinearGradient(colors: [Palette.violet.mix(with: .white, by: 0.2), Palette.violet], startPoint: .top, endPoint: .bottom))
+                    .overlay(RoundedRectangle(cornerRadius: width * 0.12, style: .continuous).strokeBorder(Palette.ink, lineWidth: max(4, width * 0.025)))
+                RoundedRectangle(cornerRadius: width * 0.07, style: .continuous)
+                    .fill(LinearGradient(colors: [Palette.teal.mix(with: .white, by: 0.25), Palette.teal], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .overlay(RoundedRectangle(cornerRadius: width * 0.07, style: .continuous).strokeBorder(Palette.ink, lineWidth: max(3, width * 0.018)))
+                    .padding(width * 0.07)
+                    .overlay {
+                        if let cat {
+                            Image(ArtName.cat(cat, .awake)).resizable().scaledToFit().padding(width * 0.1)
+                        }
+                    }
+            }
+            .frame(width: width, height: h)
+            .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: width * 0.03)
+            HStack(spacing: width * 0.5) {
+                Capsule().fill(Palette.ink).frame(width: width * 0.08, height: width * 0.07)
+                Capsule().fill(Palette.ink).frame(width: width * 0.08, height: width * 0.07)
+            }
+        }
+    }
+}
+
 /// The paw that opens the table's menu.
 struct PurrPawButton: View {
     let action: () -> Void
@@ -318,19 +358,8 @@ struct PurrWatchView: View {
         ScrollView {
             VStack(spacing: roomy ? 28 : 18) {
                 Spacer(minLength: roomy ? 40 : 12)
-                ZStack {
-                    Image(ArtName.iconTV)
-                        .resizable().scaledToFit()
-                        .frame(width: roomy ? 220 : 150, height: roomy ? 220 : 150)
-                        .shadow(color: Palette.ink.opacity(0.5), radius: 0, x: 0, y: 6)
-                    if let seat = view.drawer {
-                        Image(ArtName.cat(SeatInfo.catIndex(table.room.seats[safe: seat]), .awake))
-                            .resizable().scaledToFit()
-                            .frame(width: roomy ? 110 : 76, height: roomy ? 110 : 76)
-                            .offset(x: roomy ? 110 : 76, y: roomy ? 70 : 48)
-                    }
-                }
-                .accessibilityHidden(true)
+                PurrTVGlyph(cat: view.drawer.map { SeatInfo.catIndex(table.room.seats[safe: $0]) }, width: roomy ? 300 : 210)
+                    .accessibilityHidden(true)
                 OutlinedText(view.paused ? PurrWords.waitingForTV : PurrWords.lookAtTV, size: roomy ? 54 : 38, fill: Palette.yellow, width: 5, lines: 2)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityIdentifier("purr.look")

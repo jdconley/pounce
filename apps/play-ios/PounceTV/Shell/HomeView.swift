@@ -58,8 +58,8 @@ struct HomeView: View {
     private var posters: some View {
         // The games and, with the Dish on, its board share the height.
         let count = GameCatalog.all.count + (model.dishOn ? 1 : 0)
-        let height: CGFloat = count >= 4 ? 212 : count == 3 ? 284 : 360
-        return VStack(spacing: count >= 4 ? 26 : count == 3 ? 36 : 60) {
+        let height: CGFloat = count >= 5 ? 166 : count == 4 ? 212 : count == 3 ? 284 : 360
+        return VStack(spacing: count >= 5 ? 18 : count == 4 ? 26 : count == 3 ? 36 : 60) {
             ForEach(GameCatalog.all) { game in
                 Poster(game: game, refused: model.refused, height: height) {
                     Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.5)
@@ -105,8 +105,8 @@ private struct Poster: View {
                     .frame(width: 380, height: height)
                     .clipped()
                     .overlay(alignment: .trailing) { Rectangle().fill(Palette.ink).frame(width: 6) }
-                VStack(alignment: .leading, spacing: 30) {
-                    OutlinedText(game.title, size: height < 240 ? 64 : height < 360 ? 76 : 84, width: 5, lines: 2, alignment: .leading)
+                VStack(alignment: .leading, spacing: height < 180 ? 14 : 30) {
+                    OutlinedText(game.title, size: height < 180 ? 54 : height < 240 ? 64 : height < 360 ? 76 : 84, width: 5, lines: 2, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                     players
                 }
@@ -133,7 +133,8 @@ private struct Poster: View {
     private var players: some View {
         HStack(spacing: 14) {
             HStack(spacing: -6) {
-                ForEach(0..<game.maxPlayers, id: \.self) { seat in
+                // Six dots at most: ten would push the words off a Purrtrait poster.
+                ForEach(0..<min(game.maxPlayers, 6), id: \.self) { seat in
                     Circle()
                         .fill(tvRing(seat))
                         .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 3))
@@ -185,7 +186,7 @@ private struct BoardPoster: View {
                 .clipped()
                 .overlay(alignment: .trailing) { Rectangle().fill(Palette.ink).frame(width: 6) }
                 VStack(alignment: .leading, spacing: 24) {
-                    OutlinedText(String(localized: "Tonight's board", comment: "TV home: the Daily Dish board's poster"), size: 76, width: 5, lines: 2, alignment: .leading)
+                    OutlinedText(String(localized: "Tonight's board", comment: "TV home: the Daily Dish board's poster"), size: height < 180 ? 54 : 76, width: 5, lines: 2, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Text("Daily puzzles", comment: "TV home: under Tonight's board, what it is")
                         .font(.system(size: 32, weight: .heavy, design: .rounded))

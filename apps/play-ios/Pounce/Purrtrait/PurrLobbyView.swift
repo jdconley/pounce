@@ -152,6 +152,7 @@ struct PurrLobbyView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
+                .frame(minHeight: geo.size.height)
                 .animation(.spring(duration: 0.45, bounce: 0.35).paced, value: seated)
             }
             .scrollBounceBehavior(.basedOnSize)
