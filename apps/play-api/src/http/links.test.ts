@@ -415,12 +415,12 @@ describe("what the App Store's version can do", () => {
   });
 });
 
-describe("a Birdwatch table: in the browser and TestFlight until the App Store has 1.3", () => {
+describe("a Birdwatch table: in the browser and TestFlight until the App Store has 1.4 (1.3 never shipped)", () => {
   const BIRDS: InvitePeek = { table: "Porch", game: "birdwatch", host: { name: "Dad", cat: 4 } };
   const STORE_12 = { appStoreUrl: APP_STORE, testflightUrl: TESTFLIGHT, storeVersion: "1.2" };
 
   test("on the App Store's 1.2: the beta, says Birdwatch is coming to the iPhone app, and no App Store banner", async () => {
-    expect(BIRDWATCH_SINCE).toBe("1.3");
+    expect(BIRDWATCH_SINCE).toBe("1.4");
     const html = await sharePage("BCDFG", { ...STORE_12, viewer: "apple" }, ORIGIN, BIRDS).text();
     expect(html).toContain('<p class="game birdwatch">Birdwatch</p>');
     expect(html).toContain(`<a class="go" id="get" href="${TESTFLIGHT}"`);
@@ -449,8 +449,8 @@ describe("a Birdwatch table: in the browser and TestFlight until the App Store h
     expect(html).not.toContain("apple-itunes-app");
   });
 
-  test("once the App Store has 1.3: the App Store, Paste and the update note", async () => {
-    const html = await sharePage("BCDFG", { ...STORE_12, storeVersion: "1.3", viewer: "apple" }, ORIGIN, BIRDS).text();
+  test("once the App Store has 1.4: the App Store, Paste and the update note", async () => {
+    const html = await sharePage("BCDFG", { ...STORE_12, storeVersion: "1.4", viewer: "apple" }, ORIGIN, BIRDS).text();
     expect(html).toContain(`<a class="go" id="get" href="${APP_STORE}"`);
     expect(html).toContain("apple-itunes-app");
     expect(html).toContain('<p class="next">Then open Pounce and tap Paste.</p>');
@@ -476,7 +476,7 @@ describe("a Toy Tumble table: in the browser on every device until an app build 
       const html = await sharePage("BCDFG", { ...install, viewer: "apple" }, ORIGIN, TUMBLE).text();
       expect(html).toContain('<p class="game tumble">Toy Tumble</p>');
       expect(html).toContain('<p class="table">Saturday Night</p>');
-      expect(html).toContain('<a class="go web" href="/play/j/BCDFG">Play in your browser</a>\n<p class="note">Toy Tumble is coming to the iPhone app in 1.4.</p>');
+      expect(html).toContain('<a class="go web" href="/play/j/BCDFG">Play in your browser</a>\n<p class="note">Toy Tumble is coming to the iPhone app in 1.4, now in App Review.</p>');
       expect(html).toContain("<strong>BCDFG</strong>");
       for (const no of ["Get Pounce", "TestFlight", "testflight.apple.com", APP_STORE, "apple-itunes-app", "Update it first", "tap Paste", 'id="get"']) expect(html, no).not.toContain(no);
       // Its chip has its own colour.
@@ -499,7 +499,7 @@ describe("a Toy Tumble table: in the browser on every device until an app build 
     const html = await pouncePage({ name: "Mia", cat: 2 }, "D".repeat(22), { ...STORE_12, viewer: "apple" }, ORIGIN, "tumble").text();
     expect(html).toContain('<p class="game tumble">Toy Tumble</p>');
     expect(html).toContain('<a class="go web" href="/play/p/DDDDDDDDDDDDDDDDDDDDDD">Play in your browser</a>');
-    expect(html).toContain("Toy Tumble is coming to the iPhone app in 1.4.");
+    expect(html).toContain("Toy Tumble is coming to the iPhone app in 1.4, now in App Review.");
     expect(html).not.toContain(TESTFLIGHT);
     expect(html).not.toContain("apple-itunes-app");
   });

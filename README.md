@@ -17,14 +17,14 @@ The games:
   winner calls a card and whoever holds it is their secret partner. Three rule sets: Official,
   Tucker and Friesen. House Cats fill empty seats. In the browser now at
   [play.conleychaos.com/play](https://play.conleychaos.com/play) and on its TV page; coming to the
-  iPhone, iPad and Apple TV app in 1.4 (in App Review). Design:
+  iPhone, iPad and Apple TV app in 1.4 (now in App Review). Design:
   [docs/superpowers/specs/2026-11-25-birdwatch-design.md](docs/superpowers/specs/2026-11-25-birdwatch-design.md).
 - **Toy Tumble**: Pounce's first real-time game, for two to six. Everyone plays at once on their
   own phone or computer, and the TV shows every box. Toys fall into your box; clear rows to send
   hairballs to everyone else, and pocket tricks to hit a player or save yourself. Win three rounds
   to take the game. House Cats can fill seats at Easy or Quick. In the browser now at
   [play.conleychaos.com/play](https://play.conleychaos.com/play) and on its TV page; coming to the
-  iPhone app in 1.4. Design:
+  iPhone, iPad and Apple TV app in 1.4 (now in App Review). Design:
   [docs/superpowers/specs/2026-11-26-toy-tumble-design.md](docs/superpowers/specs/2026-11-26-toy-tumble-design.md).
 - **Purrtrait**: a draw-and-guess game for one room, two to ten players. The drawer draws a word
   on their phone, the TV shows the drawing as it is drawn, and everyone else calls out guesses.
@@ -32,7 +32,7 @@ The games:
   on the TV, and you join from the TV's code, which changes every 30 seconds. Drawings go only to
   that TV and are never saved. In the browser now: start it on
   [play.conleychaos.com/play/tv](https://play.conleychaos.com/play/tv) and draw in a phone's
-  browser. Coming to the iPhone and Apple TV app in 1.4. Design:
+  browser. Coming to the iPhone, iPad and Apple TV app in 1.4 (now in App Review). Design:
   [docs/superpowers/specs/2026-11-26-purrtrait-design.md](docs/superpowers/specs/2026-11-26-purrtrait-design.md).
 - **The Daily Dish**: four new puzzles every day, the same for the whole family, with a family
   board and streaks. Sniff (find the five-letter word), Nine Lives (a number grid), Cat Nap (one
@@ -40,13 +40,13 @@ The games:
   and in the browser at [play.conleychaos.com/play/daily](https://play.conleychaos.com/play/daily).
   The server checks every move and works out every result
   ([docs/daily-protocol.md](docs/daily-protocol.md)). Since 27 November 2026 in the browser
-  (the app in 1.4): Nine Lives has three lives and three free hints, puzzle clocks count only
+  (the app in 1.4, now in App Review): Nine Lives has three lives and three free hints, puzzle clocks count only
   play time, and a puzzle you don't finish ranks below everyone who did, by how far you got.
 
 Pounce on the TV: open [play.conleychaos.com/play/tv](https://play.conleychaos.com/play/tv) in a
 browser on the big screen, and each phone (the app since 1.2, or a browser) shows just its own
-cards. Show on TV moves a table there by its code. An Apple TV app is in TestFlight, not on the App
-Store yet. See [apps/play-ios](apps/play-ios/README.md#the-apple-tv-app).
+cards. Show on TV moves a table there by its code. The Apple TV app is in TestFlight, and its first
+App Store version, 1.4, is in App Review. See [apps/play-ios](apps/play-ios/README.md#the-apple-tv-app).
 
 No ads, no chat, no public profiles, and no account needed to play. Children under 13 get a limited
 version, and a parent decides whether they get turn alerts.
@@ -133,17 +133,19 @@ do, using the version Apple's public lookup reports (cached, never waited on). P
 Tiles arrived in 1.1. So while the App Store still has 1.0, a Tuna Tiles invite's button goes to the
 TestFlight beta, and other invites say "tap Join" (or "tap this link again") instead of "tap
 Paste". Once the App Store has 1.1, every invite goes to the App Store with Paste, by itself
-(`GAME_SINCE` and `PASTE_SINCE` in `apps/play-api/src/http/links.ts`). Birdwatch needs 1.3: until
-the App Store has it, a Birdwatch invite sends iPhones to the beta and says the game is coming to
-the iPhone app, and the landing page, help and llms.txt say it plays in the browser. Toy Tumble
+(`GAME_SINCE` and `PASTE_SINCE` in `apps/play-api/src/http/links.ts`). Birdwatch is in TestFlight
+builds from 1.3, but its first App Store version is 1.4 (1.3 was pulled from review): until the
+App Store has 1.4, a Birdwatch invite sends iPhones to the beta and says the game is coming to the
+iPhone app, and the landing page, help and llms.txt say it plays in the browser and comes to the
+app in 1.4, now in App Review (`IN_REVIEW`). Toy Tumble
 needs 1.4, and no app build has it yet, the beta included (`BETA_LACKS`), so a Toy Tumble invite
 offers only Play in your browser, on every device, and says the game is coming to the iPhone app in
 1.4. Once TestFlight builds 1.4, take `tumble` out of `BETA_LACKS` and its invites work as
 Birdwatch's do. A Purrtrait table has no invite: it is joined only from the code on its TV, so its
 `/j/` page says "Scan the code on the TV.", and the TV's QR (`/e/<code>?near=<key>`) opens the web
 player until `PURRTRAIT_APPLINKS` is turned on for the App Store's 1.4. The landing page, help and
-llms.txt say Purrtrait starts on the browser TV page and is coming to the iPhone and Apple TV app in
-1.4.
+llms.txt say Purrtrait starts on the browser TV page and is coming to the iPhone, iPad and Apple TV
+app in 1.4, now in App Review.
 
 `/get` redirects to whichever link is set (or home), so other sites and the QR code can point at
 `https://play.conleychaos.com/get`.

@@ -5,20 +5,21 @@
  * is a real one.
  *
  * The copy follows the App Store listing (docs/whats-new). The kids and privacy claims go only as
- * far as the privacy policy (privacy.ts) does: change them together. The TV section says only what
+ * far as the privacy policy (privacy.ts) does: change them together. The TV section says what
  * works today: the browser TV at /play/tv, with a phone (in the browser or the 1.2 app) showing
- * just its own hand. The Apple TV app isn't on the App Store yet, so the page doesn't name it.
+ * just its own hand. The Apple TV app comes in 1.4, which Apple is reviewing (`IN_REVIEW`), so the
+ * page says so and links nowhere for it.
  *
  * With the Daily Dish (`DAILY` on) the page also shows the four daily puzzles, in the app since
  * 1.2 and in the browser. With Birdwatch or Toy Tumble in `GAMES` it shows that game too, and
  * Purrtrait while its tables can be dealt (`GAMES` and `TV`). They are in the browser only until an
- * App Store version has them (`GAME_SINCE` in links.ts), so the page says "coming to the iPhone
- * app" (Toy Tumble and Purrtrait: "in 1.4") and the App Store app's own description and structured
- * data leave them out. Purrtrait starts on a TV, so its card shows the browser TV page and sends
+ * App Store version has them (`GAME_SINCE` in links.ts), so the page says they come to the app in
+ * 1.4, now in App Review, and the App Store app's own description and structured data leave them
+ * out. Purrtrait starts on a TV, so its card shows the browser TV page and sends
  * people there.
  */
 import { CACHE, css, escapeHtml, shell } from "./layout";
-import { appStoreId, https, PURRTRAIT_SINCE, TUMBLE_SINCE } from "./links";
+import { appStoreId, BIRDWATCH_SINCE, https, IN_REVIEW, PURRTRAIT_SINCE, TUMBLE_SINCE } from "./links";
 import { MEDIA } from "./site-media";
 
 import type { Install } from "./links";
@@ -71,17 +72,17 @@ export const and = (names: readonly string[]): string => (names.length < 2 ? (na
 
 /**
  * The page's description with Birdwatch, Toy Tumble, Purrtrait and the Daily Dish on, as in
- * production. The three newer games are only in the browser, so they are named apart from what the
- * app has.
+ * production. The three newer games are only in the browser until 1.4, so they are named apart from
+ * what the app has.
  */
 export const PURRTRAIT_DESCRIPTION =
-  "Family game night, every night. Cat Tower, Tuna Tiles and daily puzzles on iPhone, iPad and the web. Birdwatch, Toy Tumble and Purrtrait in your browser. Free.";
+  "Family game night, every night. Cat Tower, Tuna Tiles and daily puzzles on iPhone, iPad and the web. Birdwatch, Toy Tumble and Purrtrait on the web, app in 1.4.";
 
 /** What the page says it is, from the flags that are on. */
 export function pageDescription(daily: boolean, birdwatch: boolean, tumble = false, purrtrait = false): string {
   if (purrtrait) {
     const app = daily ? "Cat Tower, Tuna Tiles and daily puzzles" : "Cat Tower and Tuna Tiles";
-    return `Family game night, every night. ${app} on iPhone, iPad and the web. ${and(browserGames(birdwatch, tumble, true))} in your browser. Free.`;
+    return `Family game night, every night. ${app} on iPhone, iPad and the web. ${and(browserGames(birdwatch, tumble, true))} on the web, app in 1.4.`;
   }
   if (!tumble) {
     if (birdwatch) return daily ? BIRDWATCH_DESCRIPTION : BIRDWATCH_ONLY_DESCRIPTION;
@@ -388,25 +389,25 @@ function dishSection(): string {
 <p class="sub">Four new puzzles every day, the same for the whole family. Easy on Monday, harder by Saturday.</p>
 <ul class="puzzles">
 ${puzzle(a.calico, "teal", "Sniff", "Words", "Find the five-letter word in six tries.")}
-${puzzle(a.tuxedo, "pink", "Nine Lives", "Numbers", "Fill the grid. Every row, column and box gets 1 to 9 once.")}
+${puzzle(a.tuxedo, "pink", "Nine Lives", "Numbers", "Fill the grid. Every row, column and box gets 1 to 9 once. Three lives, three free hints.")}
 ${puzzle(a.asleep, "violet", "Cat Nap", "Logic", "One cat in each row, column and patch. No two cats touch.")}
 ${puzzle(a.leap, "orange", "Box Fort", "Blocks", "Drag pieces onto the rug. Fill a line to clear it.")}
 </ul>
 <p class="sub">A family board shows how everyone did today, and every puzzle counts toward your streaks.</p>
 <a class="btn web" href="${DISH}">Play today's puzzles</a>
-<p class="dish-note">In the iPhone and iPad app, and in your browser.</p>
+<p class="dish-note">In the iPhone and iPad app, and in your browser. Nine Lives' lives and hints come to the app in 1.4, ${IN_REVIEW}.</p>
 </div>
 </section>`;
 }
 
 /** Birdwatch's card, and where it plays today. `wide`: across the whole row, as the last of an odd number. */
 function birdwatchCard(wide: boolean): string {
-  return `<article class="panel game${wide ? " wide" : ""}"><div class="art lime">${screen(MEDIA.screens.birdwatch, "160px", ALT.birdwatch)}</div><div class="txt"><h3>Birdwatch</h3><p class="meta">Cards, in teams. 4 to 6 players.</p><p>Bid for the hand, take the feeder's extra cards, name trump and win tricks. The Bird is the top trump. With five players, call a card: whoever holds it is your secret partner. Play by Official, Tucker or Friesen rules.</p><p class="where"><a href="${PLAY}">Play it in your browser</a>. Coming to the iPhone app.</p></div></article>`;
+  return `<article class="panel game${wide ? " wide" : ""}"><div class="art lime">${screen(MEDIA.screens.birdwatch, "160px", ALT.birdwatch)}</div><div class="txt"><h3>Birdwatch</h3><p class="meta">Cards, in teams. 4 to 6 players.</p><p>Bid for the hand, take the feeder's extra cards, name trump and win tricks. The Bird is the top trump. With five players, call a card: whoever holds it is your secret partner. Play by Official, Tucker or Friesen rules.</p><p class="where"><a href="${PLAY}">Play it in your browser</a>. Coming to the iPhone and iPad app in ${BIRDWATCH_SINCE}, ${IN_REVIEW}.</p></div></article>`;
 }
 
 /** Toy Tumble's card: the real-time game, and where it plays today. */
 function tumbleCard(wide: boolean): string {
-  return `<article class="panel game${wide ? " wide" : ""}"><div class="art orange">${screen(MEDIA.screens.tumble, "160px", ALT.tumble)}</div><div class="txt"><h3>Toy Tumble</h3><p class="meta">Falling toys, in real time. 2 to 6 players.</p><p>Everyone plays at once on their own phone, and the TV shows every box. Clear rows to send hairballs to everyone else, and pocket tricks to hit a player or save yourself. Win three rounds to take the game.</p><p class="where"><a href="${PLAY}">Play it in your browser</a>. Coming to the iPhone app in ${TUMBLE_SINCE}.</p></div></article>`;
+  return `<article class="panel game${wide ? " wide" : ""}"><div class="art orange">${screen(MEDIA.screens.tumble, "160px", ALT.tumble)}</div><div class="txt"><h3>Toy Tumble</h3><p class="meta">Falling toys, in real time. 2 to 6 players.</p><p>Everyone plays at once on their own phone, and the TV shows every box. Clear rows to send hairballs to everyone else, and pocket tricks to hit a player or save yourself. Win three rounds to take the game.</p><p class="where"><a href="${PLAY}">Play it in your browser</a>. Coming to the iPhone, iPad and Apple TV app in ${TUMBLE_SINCE}, ${IN_REVIEW}.</p></div></article>`;
 }
 
 /**
@@ -414,7 +415,7 @@ function tumbleCard(wide: boolean): string {
  * link is the browser TV page.
  */
 function purrtraitCard(wide: boolean): string {
-  return `<article class="panel game tvgame${wide ? " wide" : ""}"><div class="art teal">${screen(MEDIA.screens.purrtrait, "(min-width: 640px) 320px, 80vw", ALT.purrtrait)}</div><div class="txt"><h3>Purrtrait</h3><p class="meta">Draw and guess, in one room. 2 to 10 players.</p><p>One player draws a word on their phone, and the TV shows it as it's drawn. Everyone else calls out guesses. Get it first and you both score. Needs a TV or a big screen in the room.</p><p class="where"><a href="${TV}">Start it on the TV page</a> in your browser. Coming to the iPhone and Apple TV app in ${PURRTRAIT_SINCE}.</p></div></article>`;
+  return `<article class="panel game tvgame${wide ? " wide" : ""}"><div class="art teal">${screen(MEDIA.screens.purrtrait, "(min-width: 640px) 320px, 80vw", ALT.purrtrait)}</div><div class="txt"><h3>Purrtrait</h3><p class="meta">Draw and guess, in one room. 2 to 10 players.</p><p>One player draws a word on their phone, and the TV shows it as it's drawn. Everyone else calls out guesses. Get it first and you both score. Needs a TV or a big screen in the room.</p><p class="where"><a href="${TV}">Start it on the TV page</a> in your browser. Coming to the iPhone, iPad and Apple TV app in ${PURRTRAIT_SINCE}, ${IN_REVIEW}.</p></div></article>`;
 }
 
 const COUNT = ["Two", "Three", "Four", "Five"] as const;
@@ -471,7 +472,7 @@ ${daily ? `\n${dishSection()}\n` : ""}
 <h2 id="tv">Put the table on the TV</h2>
 <p class="sub">Everyone looks up at one big table.</p>
 <ol class="steps">
-<li class="panel"><h3>Open it on the big screen</h3><p>Go to <a class="url" href="${TV}">play.conleychaos.com<wbr>/play/tv</a> on a laptop plugged into the TV, a smart TV's browser, or a tab you cast.</p></li>
+<li class="panel"><h3>Open it on the big screen</h3><p>Go to <a class="url" href="${TV}">play.conleychaos.com<wbr>/play/tv</a> on a laptop plugged into the TV, a smart TV's browser, or a tab you cast. The Apple TV app comes in 1.4, ${IN_REVIEW}.</p></li>
 <li class="panel"><h3>Scan the code</h3><p>Scan the code on the TV with your phone, or type it in. Everyone else scans to join.</p></li>
 <li class="panel"><h3>Hold just your hand</h3><p>Your phone shows just your own cards, in the app or the browser. Tap Table for the whole board.</p></li>
 </ol>
