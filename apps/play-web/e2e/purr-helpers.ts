@@ -35,8 +35,10 @@ export async function joinLink(tv: Tv): Promise<string> {
 
 /** A phone that scans the TV's code: first run, then the table, seated. */
 export async function phoneScans(browser: Browser, tv: Tv, name: string, device = devices["Pixel 7"]) {
-  const url = await joinLink(tv);
-  const phone = await newPlayer(browser, name, { path: url, context: { ...device, baseURL: PURR } });
+  // First run before the scan, so the key is fresh when the socket opens (a key lasts 30 to 60
+  // seconds, and a slow machine's first run can take a good part of that).
+  const phone = await newPlayer(browser, name, { path: "/play/", context: { ...device, baseURL: PURR } });
+  await phone.page.goto(await joinLink(tv));
   await expect(phone.page).toHaveURL(/\/play\/t\/[A-Z0-9]{5}$/);
   await expect(phone.page.getByRole("button", { name: new RegExp(`^${name}, on this device`) })).toBeVisible();
   return phone;

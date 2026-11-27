@@ -11,9 +11,12 @@ import { differ, drawerPage, drawStroke, easelPicture, inked, liftCurtain, phone
  */
 
 test.describe.configure({ mode: "serial" });
+// A press that can't happen fails in seconds, with its reason, not at the test's timeout.
+test.use({ actionTimeout: 20_000 });
 
 test("a TV and three phones, one shared, play a whole game, and the TV shows every drawing as it is drawn", async ({ browser }) => {
-  test.setTimeout(600_000);
+  // A whole game takes a minute or two; a hang fails in time for the report to be kept.
+  test.setTimeout(300_000);
   const tv = await purrTv(browser);
   await tvMakesPurrtrait(tv);
   const mom = await phoneScans(browser, tv, "Mom", devices["Pixel 7"]);
@@ -34,6 +37,7 @@ test("a TV and three phones, one shared, play a whole game, and the TV shows eve
   // Everyone draws twice: 4 players, 8 turns.
   for (let turn = 0; turn < 8; turn++) {
     const drawer = await drawerPage(pages);
+    console.log(`purrtrait: turn ${turn + 1} of 8, drawn on phone ${pages.indexOf(drawer) + 1}`);
     if ((await drawer.locator(".curtain").count()) > 0) await liftCurtain(drawer);
     const cards = drawer.locator("#purr-cards");
     if (await cards.isVisible().catch(() => false)) await drawer.locator(turn % 2 ? "#pick-tricky" : "#pick-easy").click();

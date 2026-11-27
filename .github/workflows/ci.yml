@@ -37,8 +37,8 @@ jobs:
     runs-on: ubuntu-latest
     # The browsers' system packages come from the runner's Ubuntu mirror, which has crawled
     # for 20+ minutes on some runs. They're cached below so a slow mirror can't eat the tests'
-    # time; the timeout leaves room for the first, uncached run.
-    timeout-minutes: 40
+    # time; the timeout leaves room for the first, uncached run, and a retry or two of a long spec.
+    timeout-minutes: 50
     env:
       WRANGLER_SEND_METRICS: "false"
       # Birdwatch's full games run in e2e-web-birdwatch, beside this job.
