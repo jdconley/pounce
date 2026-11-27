@@ -126,7 +126,8 @@ and so is anything else in it. 200:
     fair measure, 1 and 100 once finished. Show `percent` for a run that didn't finish ("62%"). A
     result stored before 2026-11-26 has no `percent`: use `floor(progress * 100)`.
   - `guesses` (Sniff) and `points` (Box Fort) appear only for those games.
-  - `tooFast`: faster than the game's floor. Kept, but left off every board.
+  - `tooFast`: a finished run (solved, or Box Fort's `done`) faster than the game's floor. Kept,
+    but left off every board. A run that didn't finish is never too fast.
 
 200, refused:
 

@@ -136,7 +136,9 @@ function end(m: DailyModule, p: unknown, r: RunState, outcome: Outcome, at: numb
     ...(base.points === undefined ? {} : { points: base.points }),
     progress: base.progress,
     percent: Math.max(0, Math.min(100, Math.floor(base.progress * 100 + 1e-9))),
-    tooFast: timeMs < m.floorMs[levelFor(r.date)],
+    // The floors catch a solve faster than a person can make it. Running out of lives, guesses or
+    // time quickly is just a quick loss, so only a finished run can be too fast.
+    tooFast: (outcome === "solved" || outcome === "done") && timeMs < m.floorMs[levelFor(r.date)],
   };
   r.ended = { outcome, at };
   r.result = result;

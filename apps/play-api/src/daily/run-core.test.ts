@@ -228,11 +228,18 @@ describe("hints and giving up", () => {
 });
 
 describe("the result", () => {
+  const floored = { ...m, floorMs: { 1: 60_000, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 } } as DailyModule;
+
   it("too fast is kept and marked", () => {
-    const floored = { ...m, floorMs: { 1: 60_000, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 } } as DailyModule;
     const r = run(floored);
     const a = moves(floored, p, r, 0, [step(1), step(2), step(3), step(4)], T0 + 59_999);
     expect(a).toMatchObject({ ok: true, result: { outcome: "solved", timeMs: 59_999, tooFast: true } });
+  });
+
+  it("only a finished run can be too fast: a quick give-up or loss is just a quick loss", () => {
+    const r = run(floored);
+    moves(floored, p, r, 0, [step(1)], T0 + 2_000);
+    expect(giveUp(floored, p, r, T0 + 5_000)).toMatchObject({ ok: true, result: { outcome: "gaveUp", tooFast: false } });
     const s = run(floored);
     expect(moves(floored, p, s, 0, [step(1), step(2), step(3), step(4)], T0 + 60_000)).toMatchObject({ result: { tooFast: false } });
   });

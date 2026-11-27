@@ -369,6 +369,9 @@ rules, and must never break.
 - **Plausibility.**
   - A run faster than a game's floor (for example, Nine Lives under 45 seconds) is kept, but marked
     too fast and left off the board.
+  - Only a finished run (solved, or Box Fort's normal ending) can be too fast. *(Ruling,
+    2026-11-26, found in the cross-platform check: three wrong numbers in a minute is a quick loss,
+    not a bot, and it belongs on the board at its percent.)*
   - Moves spaced closer than a human can make them are refused.
   - The builder sets the floors from playtests. They are written in one table in the code.
 - **Limits.**
