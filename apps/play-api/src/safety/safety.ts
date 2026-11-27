@@ -82,7 +82,7 @@ export async function guardJoin(
   const retryAt = Math.max(byDevice.retryAt ?? 0, byIp.retryAt ?? 0);
   if (retryAt > 0) return { retryAfter: Math.max(1, Math.ceil((retryAt - now) / 1000)) };
   // The table counts only a guess the limits took, so a locked-out guesser can't close its typed code.
-  if (known === "not_near") await room(env, code).missedNear();
+  if (known === "not_near") await room(env, code).missedNear().catch(() => undefined);
   return known === "not_near" ? { exists: true, notNear: true } : { exists: !failed };
 }
 
@@ -96,7 +96,7 @@ export async function peekNear(env: Env, code: string, near: string, ip: string,
     const live = await room(env, code).nearLive(near);
     const { retryAt } = await limiter(env, `ip:${ipBucket(ip)}`).guess(!live, IP_JOIN_RULE, now);
     // As for joining: the table counts a wrong key only when the address wasn't refused.
-    if (retryAt === null && !live) await room(env, code).missedNear();
+    if (retryAt === null && !live) await room(env, code).missedNear().catch(() => undefined);
     return retryAt === null && live;
   } catch {
     return false;
