@@ -13,10 +13,22 @@ struct NineLivesMarks: Equatable {
     var clashBump = 0
     /// Set when the grid is solved: the tiles wave.
     var solved = false
+    /// The lives rules: a wrong number shown in its empty cell (the phone's own, or the TV's read
+    /// of the server's last wrong number in a cell still empty).
+    var wrong: [Int: Int] = [:]
+    /// Bumped on each wrong number, so the tile in `wrongCell` shakes.
+    var wrongBump = 0
+    var wrongCell: Int?
+    /// Sets on their way to the server.
+    var pending: Set<Int> = []
+    /// Out of lives: the solution, filled softly into every empty cell.
+    var solution: [Int]?
 
     static func == (a: Self, b: Self) -> Bool {
         a.selected == b.selected && a.notes == b.notes && a.placed?.cell == b.placed?.cell
             && a.placed?.count == b.placed?.count && a.clashBump == b.clashBump && a.solved == b.solved
+            && a.wrong == b.wrong && a.wrongBump == b.wrongBump && a.wrongCell == b.wrongCell && a.pending == b.pending
+            && a.solution == b.solution
     }
 }
 
@@ -89,6 +101,12 @@ struct NineLivesGrid: View {
                         }
                     }
                     .modifier(TileMotion(cell: i, marks: marks, clashing: clashes.contains(i)))
+            } else if let solution = marks.solution, solution.indices.contains(i), solution[i] != 0 {
+                PawTile(digit: solution[i], kind: .shown, size: m.cell * 0.9)
+                    .modifier(SolutionFill(cell: i))
+            } else if let wrong = marks.wrong[i] {
+                PawTile(digit: wrong, kind: .wrong, size: m.cell * 0.9)
+                    .shake(trigger: marks.wrongCell == i ? marks.wrongBump : 0)
             } else if i < marks.notes.count, !marks.notes[i].isEmpty {
                 NotesView(notes: marks.notes[i], size: m.cell)
             }
@@ -113,6 +131,8 @@ struct NineLivesGrid: View {
     }
 
     private func kind(_ i: Int) -> PawTile.Kind {
+        // On its way to the server: neutral until the answer lands (it must never look right first).
+        if marks.pending.contains(i) { return .checking }
         if clashes.contains(i) && !board.isGiven(i) { return .clash }
         if board.isGiven(i) { return .given }
         if board.hinted.contains(i) { return .hinted }
@@ -121,11 +141,16 @@ struct NineLivesGrid: View {
 
     private func accessibilityValue(_ i: Int) -> String {
         let d = board.cells[i]
+        if d == 0, let solution = marks.solution, solution.indices.contains(i) {
+            return "\(solution[i]), answer"
+        }
+        if d == 0, let wrong = marks.wrong[i] { return "\(wrong), wrong" }
         if d == 0 {
             let notes = i < marks.notes.count ? marks.notes[i].sorted() : []
             return notes.isEmpty ? "Empty" : "Notes \(notes.map(String.init).joined(separator: " "))"
         }
         var parts = ["\(d)"]
+        if marks.pending.contains(i) { parts.append("checking") }
         if board.isGiven(i) { parts.append("given") } else if board.hinted.contains(i) { parts.append("hint") }
         if clashes.contains(i) { parts.append("clash") }
         return parts.joined(separator: ", ")
@@ -170,6 +195,22 @@ private struct NotesView: View {
                 }
             }
         }
+    }
+}
+
+/// A solution tile, out of lives: it settles in, in a gentle wave from the top left.
+private struct SolutionFill: ViewModifier {
+    let cell: Int
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(shown || reduceMotion ? 1 : 0.4)
+            .opacity(shown ? 1 : 0)
+            .onAppear {
+                withAnimation(.spring(duration: 0.45, bounce: 0.25).delay(Double(cell / 9 + cell % 9) * 0.04).paced) { shown = true }
+            }
     }
 }
 

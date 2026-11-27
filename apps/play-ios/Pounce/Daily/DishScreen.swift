@@ -146,7 +146,7 @@ struct DishScreen: View {
         } label: {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
-                    DailyTreat(game: game, side: roomy ? 58 : 46, done: result != nil)
+                    DailyTreat(game: game, side: roomy ? 58 : 46, done: result?.outcome.finished == true, ended: result != nil)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(verbatim: game.title)
                             .font(.system(size: roomy ? 22 : 18, weight: .black, design: .rounded))
@@ -211,7 +211,7 @@ struct DishScreen: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: game.title))
-        .accessibilityValue(result.map(game.summary) ?? String(localized: "Not played", comment: "VoiceOver: a daily puzzle not played yet"))
+        .accessibilityValue(result.map(game.spoken) ?? String(localized: "Not played", comment: "VoiceOver: a daily puzzle not played yet"))
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("dish.card.\(game.id)")
     }

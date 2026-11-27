@@ -47,19 +47,122 @@ public struct NineLivesPuzzle: Sendable, Equatable, Codable {
     public init(givens: [Int]) { self.givens = givens }
 }
 
+/// Which rules a run plays, fixed at its first start (docs/daily-protocol.md, "## Nine Lives").
+public enum NineLivesRules: String, Sendable, Equatable, Codable {
+    /// No `rules` at start (every app before 2026-11-26): no check against the solution, clashes,
+    /// unlimited hints at 30 seconds each.
+    case first
+    /// `{ "rules": "lives" }`: a wrong number costs one of three lives, right numbers lock, three
+    /// free hints.
+    case lives
+
+    public static let lifeCount = 3
+    public static let hintCount = 3
+}
+
+/// A wrong number, as the server lists it: cell `i`, digit `d`.
+public struct NineLivesWrong: Sendable, Equatable, Hashable, Codable {
+    public let i: Int
+    public let d: Int
+    public init(i: Int, d: Int) {
+        self.i = i
+        self.d = d
+    }
+}
+
 /// The run's board as the server keeps it (`publicState`): every cell, and the cells hints filled.
+/// Under the lives rules also what is left (`lives`, `hintsLeft`), every wrong number entered, and
+/// the solution once the run ended out of lives. Every field past `cells` decodes leniently.
 public struct NineLivesState: Sendable, Equatable, Codable {
     public let cells: [Int]
     public let hinted: [Int]
-    public init(cells: [Int], hinted: [Int]) {
+    public let rules: NineLivesRules
+    public let lives: Int
+    public let hintsLeft: Int
+    public let wrong: [NineLivesWrong]
+    public let solution: [Int]?
+
+    public init(
+        cells: [Int], hinted: [Int], rules: NineLivesRules = .first, lives: Int = NineLivesRules.lifeCount,
+        hintsLeft: Int = NineLivesRules.hintCount, wrong: [NineLivesWrong] = [], solution: [Int]? = nil
+    ) {
         self.cells = cells
         self.hinted = hinted
+        self.rules = rules
+        self.lives = lives
+        self.hintsLeft = hintsLeft
+        self.wrong = wrong
+        self.solution = solution
+    }
+
+    private enum Key: String, CodingKey { case cells, hinted, rules, lives, hintsLeft, wrong, solution }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: Key.self)
+        cells = try c.decode([Int].self, forKey: .cells)
+        hinted = (try? c.decodeIfPresent([Int].self, forKey: .hinted)) ?? []
+        // An unknown rules name is a newer server's: play it as lives, the rules that check.
+        let name = (try? c.decodeIfPresent(String.self, forKey: .rules)) ?? nil
+        rules = name.map { NineLivesRules(rawValue: $0) ?? .lives } ?? .first
+        lives = ((try? c.decodeIfPresent(Int.self, forKey: .lives)) ?? nil).map { min(max($0, 0), NineLivesRules.lifeCount) }
+            ?? NineLivesRules.lifeCount
+        hintsLeft = ((try? c.decodeIfPresent(Int.self, forKey: .hintsLeft)) ?? nil).map { max($0, 0) } ?? NineLivesRules.hintCount
+        // One odd entry drops itself, not the list.
+        let raw = ((try? c.decodeIfPresent([DailyJSON].self, forKey: .wrong)) ?? nil) ?? []
+        wrong = raw.compactMap { try? $0.decoded(as: NineLivesWrong.self) }
+        let solution = (try? c.decodeIfPresent([Int].self, forKey: .solution)) ?? nil
+        self.solution = solution?.count == NineLivesBoard.cellCount ? solution : nil
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: Key.self)
+        try c.encode(cells, forKey: .cells)
+        try c.encode(hinted, forKey: .hinted)
+        guard rules == .lives else { return }
+        try c.encode(rules, forKey: .rules)
+        try c.encode(lives, forKey: .lives)
+        try c.encode(hintsLeft, forKey: .hintsLeft)
+        try c.encode(wrong, forKey: .wrong)
+        try c.encodeIfPresent(solution, forKey: .solution)
+    }
+}
+
+/// What the server reveals for Nine Lives. A hint is `{ i, d }`; under the lives rules a wrong set
+/// is `{ k: "wrong", i, d, lives }`, and the one that leaves no lives also carries
+/// `"solution": [81]`. A kind this app doesn't know decodes as `.other` and is skipped.
+public enum NineLivesReveal: Sendable, Equatable, Decodable {
+    case hint(cell: Int, digit: Int)
+    /// `lives`: what is left after it. `solution`: only on the one that leaves none.
+    case wrong(cell: Int, digit: Int, lives: Int, solution: [Int]?)
+    case other
+
+    private enum Key: String, CodingKey { case k, i, d, lives, solution }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: Key.self)
+        let k = (try? c.decodeIfPresent(String.self, forKey: .k)) ?? nil
+        let i = (try? c.decodeIfPresent(Int.self, forKey: .i)) ?? nil
+        let d = (try? c.decodeIfPresent(Int.self, forKey: .d)) ?? nil
+        switch k {
+        case nil:
+            if let i, let d { self = .hint(cell: i, digit: d) } else { self = .other }
+        case "wrong":
+            guard let i, let d else { self = .other; return }
+            let lives = ((try? c.decodeIfPresent(Int.self, forKey: .lives)) ?? nil) ?? 0
+            let solution = (try? c.decodeIfPresent([Int].self, forKey: .solution)) ?? nil
+            self = .wrong(
+                cell: i, digit: d, lives: min(max(lives, 0), NineLivesRules.lifeCount),
+                solution: solution?.count == NineLivesBoard.cellCount ? solution : nil)
+        default:
+            self = .other
+        }
     }
 }
 
 /// Why a move is refused, as the server's `Applied.reason`.
 public enum NineLivesRefusal: String, Sendable, Equatable {
-    /// A given, or a cell a hint filled.
+    /// A given, or a cell a hint filled. Under the lives rules also a cell holding its answer, any
+    /// `clear`, and a hint with none left.
     case illegal
     /// The grid is already solved.
     case over
@@ -69,25 +172,49 @@ public struct NineLivesBoard: Sendable, Equatable {
     public static let cellCount = 81
 
     public let givens: [Int]
+    public let rules: NineLivesRules
+    /// Under the first rules, any digit; under the lives rules, only right ones (and, on the phone,
+    /// a set waiting for the server's answer).
     public private(set) var cells: [Int]
     /// Cells a hint filled, ascending. Locked like givens.
     public private(set) var hinted: [Int]
+    /// The lives rules: lives left (3 to 0), hints left (3 to 0), every wrong number entered, and
+    /// the solution once the run ended out of lives.
+    public private(set) var lives = NineLivesRules.lifeCount
+    public private(set) var hintsLeft = NineLivesRules.hintCount
+    public private(set) var wrong: [NineLivesWrong] = []
+    public private(set) var solution: [Int]?
 
-    public init(givens: [Int]) {
+    public init(givens: [Int], rules: NineLivesRules = .first) {
         precondition(givens.count == Self.cellCount, "a grid has 81 cells")
         self.givens = givens
+        self.rules = rules
         cells = givens
         hinted = []
     }
 
     /// A run picked up from the server: its puzzle and its board.
     public init(puzzle: NineLivesPuzzle, state: NineLivesState) {
-        self.init(givens: puzzle.givens)
+        self.init(givens: puzzle.givens, rules: state.rules)
         cells = state.cells
         hinted = state.hinted
+        lives = state.lives
+        hintsLeft = state.hintsLeft
+        wrong = state.wrong
+        solution = state.solution
     }
 
-    public var state: NineLivesState { NineLivesState(cells: cells, hinted: hinted) }
+    public var state: NineLivesState {
+        NineLivesState(cells: cells, hinted: hinted, rules: rules, lives: lives, hintsLeft: hintsLeft, wrong: wrong, solution: solution)
+    }
+
+    public var playsLives: Bool { rules == .lives }
+    /// The lives rules, and none left: the run ended `missed`.
+    public var isOutOfLives: Bool { playsLives && lives == 0 }
+    /// A hint may be asked: always under the first rules, while some are left under lives.
+    public var hintsAvailable: Bool { !playsLives || hintsLeft > 0 }
+    /// Under the lives rules, this digit in this cell already cost a life: never send it again.
+    public func costALife(_ cell: Int, _ digit: Int) -> Bool { wrong.contains(NineLivesWrong(i: cell, d: digit)) }
 
     private static let peerTable: [[Int]] = (0..<cellCount).map { i in
         let r = i / 9, c = i % 9, br = r / 3 * 3, bc = c / 3 * 3
@@ -105,7 +232,10 @@ public struct NineLivesBoard: Sendable, Equatable {
     public static func peers(of cell: Int) -> [Int] { peerTable[cell] }
 
     public func isGiven(_ cell: Int) -> Bool { givens[cell] != 0 }
-    public func isLocked(_ cell: Int) -> Bool { givens[cell] != 0 || hinted.contains(cell) }
+    /// A given or a hint's cell; under the lives rules, any cell holding a digit (a right one locks).
+    public func isLocked(_ cell: Int) -> Bool {
+        givens[cell] != 0 || hinted.contains(cell) || (playsLives && cells[cell] != 0)
+    }
 
     /// Cells whose digit repeats in one of their units, ascending. Givens count too.
     public var clashes: [Int] { Self.clashes(in: cells) }
@@ -138,11 +268,14 @@ public struct NineLivesBoard: Sendable, Equatable {
     /// How many cells hold `digit`.
     public func count(of digit: Int) -> Int { cells.reduce(0) { $0 + ($1 == digit ? 1 : 0) } }
 
-    /// Plays `move`; nil when it was legal. A clash is legal: the board shows it.
+    /// Plays `move`; nil when it was legal. A clash is legal: the board shows it. Under the lives
+    /// rules a set goes in as if right (the server's answer may take it out again, `applyWrong`),
+    /// and `clear` is illegal.
     @discardableResult
     public mutating func apply(_ move: NineLivesMove) -> NineLivesRefusal? {
-        if looksSolved { return .over }
+        if looksSolved || isOutOfLives { return .over }
         if isLocked(move.cell) { return .illegal }
+        if playsLives, case .clear = move { return .illegal }
         switch move {
         case .set(let cell, let digit): cells[cell] = digit
         case .clear(let cell): cells[cell] = 0
@@ -150,12 +283,36 @@ public struct NineLivesBoard: Sendable, Equatable {
         return nil
     }
 
-    /// The server's hint filled `cell` with `digit`; that cell is locked from now on.
+    /// The server's hint filled `cell` with `digit`; that cell is locked from now on. Under the
+    /// lives rules it uses one of the hints left.
     public mutating func applyReveal(cell: Int, digit: Int) {
         cells[cell] = digit
         if !hinted.contains(cell) {
             hinted.append(cell)
             hinted.sort()
+            if playsLives { hintsLeft = max(0, hintsLeft - 1) }
         }
+    }
+
+    /// The server said `digit` in `cell` is wrong, with `lives` left: it comes out of the cell, and
+    /// is kept in `wrong`. Said twice (a resent batch), it counts once.
+    public mutating func applyWrong(cell: Int, digit: Int, lives left: Int) {
+        if cells[cell] == digit, givens[cell] == 0, !hinted.contains(cell) { cells[cell] = 0 }
+        let w = NineLivesWrong(i: cell, d: digit)
+        if !wrong.contains(w) { wrong.append(w) }
+        lives = min(lives, max(0, left))
+    }
+
+    /// The run ended out of lives: the server's solution, to show.
+    public mutating func applySolution(_ cells: [Int]) {
+        guard cells.count == Self.cellCount else { return }
+        solution = cells
+    }
+
+    /// A set the phone shows that the server hasn't answered, taken back (it was refused, or the
+    /// run ended first).
+    public mutating func takeBack(cell: Int) {
+        guard givens[cell] == 0, !hinted.contains(cell) else { return }
+        cells[cell] = 0
     }
 }

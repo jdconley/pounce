@@ -107,7 +107,7 @@ struct DishBand: View {
             model.playDaily(game.id)
         } label: {
             VStack(spacing: 6) {
-                DailyTreat(game: game, side: side, done: result != nil)
+                DailyTreat(game: game, side: side, done: result?.outcome.finished == true, ended: result != nil)
                     .overlay(alignment: .topTrailing) {
                         if row?.playing != nil, result == nil {
                             Circle().fill(Palette.yellow).overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2))
@@ -127,7 +127,7 @@ struct DishBand: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: game.title))
-        .accessibilityValue(result.map(game.summary) ?? String(localized: "Not played", comment: "VoiceOver: a daily puzzle not played yet"))
+        .accessibilityValue(result.map(game.spoken) ?? String(localized: "Not played", comment: "VoiceOver: a daily puzzle not played yet"))
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("home.dish.\(game.id)")
     }

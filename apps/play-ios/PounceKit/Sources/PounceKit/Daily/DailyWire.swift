@@ -26,10 +26,14 @@ public struct DailyResult: Sendable, Hashable, Codable {
     public let date: String
     public let number: Int
     public let outcome: DailyOutcome
-    /// From start to the move that ended it, plus 30 seconds a hint.
+    /// The run's active time when it ended (the time the puzzle was on screen), plus the run's
+    /// `hintMs` a hint. A run stored before active time: from start to the move that ended it.
     public let timeMs: Int
     public let hints: Int
     public let progress: Double
+    /// How far it got by the game's own measure, rounded down: 100 only once finished. A result
+    /// stored before 2026-11-26 has none: use `shownPercent`.
+    public let percent: Int?
     /// Faster than the game's floor: kept, but off every board.
     public let tooFast: Bool
     /// Sniff only.
@@ -39,7 +43,7 @@ public struct DailyResult: Sendable, Hashable, Codable {
 
     public init(
         game: String, date: String, number: Int, outcome: DailyOutcome, timeMs: Int, hints: Int = 0, progress: Double,
-        tooFast: Bool = false, guesses: Int? = nil, points: Int? = nil
+        percent: Int? = nil, tooFast: Bool = false, guesses: Int? = nil, points: Int? = nil
     ) {
         self.game = game
         self.date = date
@@ -48,10 +52,47 @@ public struct DailyResult: Sendable, Hashable, Codable {
         self.timeMs = timeMs
         self.hints = hints
         self.progress = progress
+        self.percent = percent
         self.tooFast = tooFast
         self.guesses = guesses
         self.points = points
     }
+
+    private enum Key: String, CodingKey { case game, date, number, outcome, timeMs, hints, progress, percent, tooFast, guesses, points }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: Key.self)
+        game = try c.decode(String.self, forKey: .game)
+        date = try c.decode(String.self, forKey: .date)
+        number = try c.decode(Int.self, forKey: .number)
+        outcome = try c.decode(DailyOutcome.self, forKey: .outcome)
+        timeMs = try c.decode(Int.self, forKey: .timeMs)
+        hints = try c.decodeIfPresent(Int.self, forKey: .hints) ?? 0
+        progress = try c.decodeIfPresent(Double.self, forKey: .progress) ?? 0
+        // Lenient: an odd percent is none, and the progress stands in.
+        percent = ((try? c.decodeIfPresent(Int.self, forKey: .percent)) ?? nil).map { min(max($0, 0), 100) }
+        tooFast = try c.decodeIfPresent(Bool.self, forKey: .tooFast) ?? false
+        guesses = try c.decodeIfPresent(Int.self, forKey: .guesses)
+        points = try c.decodeIfPresent(Int.self, forKey: .points)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: Key.self)
+        try c.encode(game, forKey: .game)
+        try c.encode(date, forKey: .date)
+        try c.encode(number, forKey: .number)
+        try c.encode(outcome.rawValue, forKey: .outcome)
+        try c.encode(timeMs, forKey: .timeMs)
+        try c.encode(hints, forKey: .hints)
+        try c.encode(progress, forKey: .progress)
+        try c.encodeIfPresent(percent, forKey: .percent)
+        try c.encode(tooFast, forKey: .tooFast)
+        try c.encodeIfPresent(guesses, forKey: .guesses)
+        try c.encodeIfPresent(points, forKey: .points)
+    }
+
+    /// The percent to show: the server's, or for an older result `floor(progress * 100)`.
+    public var shownPercent: Int { percent ?? min(100, max(0, Int((progress * 100).rounded(.down)))) }
 }
 
 /// `POST /v1/daily/{game}/start`: a new run, or the one already going (another device carries on).
@@ -74,10 +115,19 @@ public struct DailyStart: Sendable, Hashable, Codable {
     /// Set once the run has ended: show the end screen.
     public let result: DailyResult?
     public let closesAt: Int64
+    /// What one hint adds to the run's time: 30 seconds, or 0 under Nine Lives' `"lives"` rules.
+    /// A server before this field always added 30 seconds.
+    public let hintMs: Int
+    /// The run's active time so far, from the server (`## Active time`): carry on from it. Nil from
+    /// a server before active time: count from `startedAt` (`DailyClock.activeMs`).
+    public let activeMs: Int64?
+
+    public static let firstHintMs = 30_000
 
     public init(
         run: String, game: String, date: String, number: Int, level: Int, startedAt: Int64, now: Int64, puzzle: DailyJSON,
-        state: DailyJSON, seq: Int, hints: Int, result: DailyResult?, closesAt: Int64
+        state: DailyJSON, seq: Int, hints: Int, result: DailyResult?, closesAt: Int64, hintMs: Int = DailyStart.firstHintMs,
+        activeMs: Int64? = nil
     ) {
         self.run = run
         self.game = game
@@ -92,6 +142,28 @@ public struct DailyStart: Sendable, Hashable, Codable {
         self.hints = hints
         self.result = result
         self.closesAt = closesAt
+        self.hintMs = hintMs
+        self.activeMs = activeMs
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        run = try c.decode(String.self, forKey: .run)
+        game = try c.decode(String.self, forKey: .game)
+        date = try c.decode(String.self, forKey: .date)
+        number = try c.decode(Int.self, forKey: .number)
+        level = try c.decode(Int.self, forKey: .level)
+        startedAt = try c.decode(Int64.self, forKey: .startedAt)
+        now = try c.decode(Int64.self, forKey: .now)
+        puzzle = try c.decode(DailyJSON.self, forKey: .puzzle)
+        state = try c.decode(DailyJSON.self, forKey: .state)
+        seq = try c.decode(Int.self, forKey: .seq)
+        hints = try c.decode(Int.self, forKey: .hints)
+        result = try c.decodeIfPresent(DailyResult.self, forKey: .result)
+        closesAt = try c.decode(Int64.self, forKey: .closesAt)
+        // Lenient: missing, or not a whole number of milliseconds, is the first rules' 30 seconds.
+        hintMs = (try? c.decodeIfPresent(Int.self, forKey: .hintMs)).flatMap { $0 }.map { max(0, $0) } ?? Self.firstHintMs
+        activeMs = (try? c.decodeIfPresent(Int64.self, forKey: .activeMs)).flatMap { $0 }.map { max(0, $0) }
     }
 }
 
@@ -138,15 +210,36 @@ public enum DailyMovesAnswer: Sendable, Hashable, Decodable {
     }
 }
 
-/// `{ from, moves }`, the moves route's body.
+/// `{ from, moves, activeMs }`, the moves route's body.
 public struct DailyMovesBody: Sendable, Hashable, Codable {
     public let from: Int
     public let moves: [DailyJSON]
+    /// The run's active time when the batch went (`## Active time`).
+    public let activeMs: Int64?
 
-    public init(from: Int, moves: [DailyJSON]) {
+    public init(from: Int, moves: [DailyJSON], activeMs: Int64? = nil) {
         self.from = from
         self.moves = moves
+        self.activeMs = activeMs
     }
+}
+
+/// `{ hints, activeMs }`, the hint route's body.
+public struct DailyHintBody: Sendable, Hashable, Codable {
+    public let hints: Int
+    public let activeMs: Int64?
+
+    public init(hints: Int, activeMs: Int64? = nil) {
+        self.hints = hints
+        self.activeMs = activeMs
+    }
+}
+
+/// `{ activeMs }`, the give-up route's body.
+public struct DailyGiveUpBody: Sendable, Hashable, Codable {
+    public let activeMs: Int64?
+
+    public init(activeMs: Int64? = nil) { self.activeMs = activeMs }
 }
 
 // MARK: the board

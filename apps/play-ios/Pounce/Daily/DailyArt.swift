@@ -17,11 +17,14 @@ enum DailyArt {
     }
 }
 
-/// A game's treat: its color disc, ink ring and glyph, with a lip of shadow. Done: a check badge.
+/// A game's treat: its color disc, ink ring and glyph, with a lip of shadow. Done (solved, or Box
+/// Fort's ending): a check badge. Ended without finishing: a neutral moon, as on the board's rows,
+/// so it never reads as solved.
 struct DailyTreat: View {
     let game: DailyGameInfo
     var side: CGFloat = 64
     var done = false
+    var ended = false
 
     var body: some View {
         let tint = DailyArt.tint(game)
@@ -38,12 +41,15 @@ struct DailyTreat: View {
                     .padding(side * 0.24)
             }
             .overlay(alignment: .bottomTrailing) {
-                if done {
-                    Image(systemName: "checkmark")
+                if done || ended {
+                    Image(systemName: done ? "checkmark" : "moon.fill")
                         .font(.system(size: side * 0.2, weight: .black))
-                        .foregroundStyle(Palette.ink)
+                        .foregroundStyle(done ? Palette.ink : .white)
                         .frame(width: side * 0.38, height: side * 0.38)
-                        .background(Circle().fill(Palette.lime).overlay(Circle().strokeBorder(Palette.ink, lineWidth: max(2, side * 0.04))))
+                        .background(
+                            Circle().fill(done ? Palette.lime : Palette.night.mix(with: .white, by: 0.3))
+                                .overlay(Circle().strokeBorder(Palette.ink, lineWidth: max(2, side * 0.04))))
+                        .compositingGroup()
                         .offset(x: side * 0.06, y: side * 0.04)
                 }
             }

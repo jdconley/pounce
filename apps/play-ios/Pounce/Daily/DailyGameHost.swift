@@ -39,10 +39,15 @@ protocol DailyGameView: View, SendableMetatype {
     /// The share card's grid for a finished run, from the server's final public state: marks with
     /// no letters or digits (Sniff's guesses). Nil (the default): the card shows the result alone.
     nonisolated static func shareMarks(_ state: State) -> [[DailyShareMark]]?
+
+    /// How long the board stays up after the run ends while it plays, before the end screen
+    /// (Nine Lives out of lives fills in the solution). Zero, the default: the end comes at once.
+    nonisolated static func endHold(_ result: DailyResult) -> Duration
 }
 
 extension DailyGameView {
     nonisolated static func shareMarks(_ state: State) -> [[DailyShareMark]]? { nil }
+    nonisolated static func endHold(_ result: DailyResult) -> Duration { .zero }
 }
 
 /// A game's play screen, ready to show: the start answer decoded, and a way to build the view.
@@ -51,6 +56,8 @@ struct DailyPlayable: Sendable {
     let make: @MainActor @Sendable (DailyRunSession) -> AnyView
     /// The share card's marks from a final state (decoded off the main actor by the caller).
     let marks: @Sendable (DailyJSON) -> [[DailyShareMark]]?
+    /// `DailyGameView.endHold`.
+    var hold: @Sendable (DailyResult) -> Duration = { _ in .zero }
 }
 
 extension DailyGameView {
@@ -59,7 +66,7 @@ extension DailyGameView {
         let (puzzle, state) = try await session.decodeStart(puzzle: Puzzle.self, state: State.self)
         return DailyPlayable(
             game: Self.game, make: { session in AnyView(Self(session: session, puzzle: puzzle, state: state)) },
-            marks: { json in (try? json.decoded(as: State.self)).flatMap(Self.shareMarks) })
+            marks: { json in (try? json.decoded(as: State.self)).flatMap(Self.shareMarks) }, hold: { Self.endHold($0) })
     }
 }
 
