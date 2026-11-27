@@ -161,6 +161,15 @@ test("no tip ever covers the drawer's Undo, Clear, Got it or Give up, at any siz
     await page.locator("#purr-got-it").click();
     await expect(page.locator(".purr-who-btn").first()).toBeVisible();
     await expect(page.getByText("Tap who said it first")).toBeVisible();
+    // ...and every cat on it still takes a tap.
+    const covered = await page.locator(".purr-who-btn").evaluateAll((els) =>
+      els.flatMap((el) => {
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return hit && el.contains(hit) ? [] : [el.textContent ?? ""];
+      }),
+    );
+    expect(covered, `${name}: cats covered on the Who got it? sheet`).toEqual([]);
     await closeAll(context);
   }
 });

@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { buzz } from "../lib/haptics";
 import { play } from "../lib/sound";
 import { mySeats } from "../store/lobby";
-import { Button, Cat, learnTip, Sheet, Tip, tipLearned, useSize, useTipsVersion } from "../ui/common";
+import { Button, Cat, CloseMark, learnTip, Sheet, Tip, tipLearned, useSize, useTipsVersion } from "../ui/common";
 import { replayInk } from "../workers/purr-ink";
 
 import { EaselCanvas } from "./purr-easel-view";
@@ -306,6 +306,15 @@ function DrawScreen(props: Props) {
       <Tip id="purr.easel" anchor="purr-word" text="No letters or numbers" show={!easelTipDone} place="below" />
       {sheet === "got" ? (
         <Sheet title="Who got it?" onClose={() => setSheet(null)}>
+          {/* Got it's tip, in the sheet's own flow above the cats it points at: it covers nothing. */}
+          {!tipLearned("purr.got") ? (
+            <div class="tip above purr-inline-tip" role="status">
+              <span>Tap who said it first</span>
+              <button type="button" aria-label="Dismiss tip" onClick={() => learnTip("purr.got")}>
+                <CloseMark />
+              </button>
+            </div>
+          ) : null}
           <div class="purr-who" id="purr-who">
             {guessers.map((s) => (
               <button
@@ -326,8 +335,6 @@ function DrawScreen(props: Props) {
               </button>
             ))}
           </div>
-          {/* On the sheet itself, where it applies: never over the drawer's tools. */}
-          <Tip id="purr.got" anchor="purr-who" text="Tap who said it first" show />
         </Sheet>
       ) : null}
       {sheet === "giveUp" ? (

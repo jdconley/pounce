@@ -815,6 +815,14 @@
   font-size: 1.3rem;
 }
 
+/* Got it's tip sits in the sheet's flow, its arrow down at the cats: it covers none of them. */
+.purr-inline-tip {
+  position: relative;
+  align-self: center;
+  margin: 0 auto 16px;
+  --arrow-x: 50%;
+}
+
 /* A tip over the drawer's tools never takes their taps: only its X does. */
 .purr-draw .tip {
   pointer-events: none;
