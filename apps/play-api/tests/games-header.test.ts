@@ -210,7 +210,7 @@ describe("a device that stops sending the header", { timeout: 60_000 }, () => {
 });
 
 describe("an app that does not list Purrtrait", { timeout: 30_000 }, () => {
-  const PURR_APP = { "x-pounce-games": "cat-tower,tiles,purrtrait" };
+  const PURR_APP = { "x-pounce-games": "cat-tower,tiles,purrtrait", "x-pounce-app": "platform=ios; version=1.4; build=1; protocol=1" };
 
   test("cannot make a table, is told there is none when it joins one, and never sees it listed", async () => {
     const mf = await worker(script, { sent, tv: true, games: "tiles,purrtrait" });

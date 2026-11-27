@@ -87,7 +87,7 @@ export function gamesListed(header: string | null): GameId[] {
  * The oldest app version given a game, for a game that needs one newer than the first app to
  * list it: a test build may list a game before the version that has it is out.
  */
-export const GAME_MIN_APP: Partial<Record<GameId, string>> = { tumble: "1.4" };
+export const GAME_MIN_APP: Partial<Record<GameId, string>> = { purrtrait: "1.4", tumble: "1.4" };
 
 /**
  * The games a request's app can draw: what its `X-Pounce-Games` lists, less any game its
