@@ -105,10 +105,20 @@ async function rulesAsked(request: Request): Promise<string | undefined> {
   }
 }
 
-/** `{ from, moves }`: anything else in the body (a result, a time) is never read. */
-function parseBatch(body: Record<string, unknown> | null): { from: number; moves: unknown[] } | null {
+/**
+ * A client's active time (`activeMs`, spec §3 "The clock"), when it sent a sane one: a whole
+ * number of milliseconds, 0 or more. Anything else is as if it sent none.
+ */
+function activeOf(body: unknown): number | undefined {
+  const v = (body as { activeMs?: unknown } | null)?.activeMs;
+  return typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
+}
+
+/** `{ from, moves, activeMs? }`: anything else in the body (a result, a score) is never read. */
+function parseBatch(body: Record<string, unknown> | null): { from: number; moves: unknown[]; activeMs?: number } | null {
   if (!body || !Number.isInteger(body.from) || (body.from as number) < 0 || !("moves" in body)) return null;
-  return { from: body.from as number, moves: body.moves as unknown[] };
+  const activeMs = activeOf(body);
+  return { from: body.from as number, moves: body.moves as unknown[], ...(activeMs === undefined ? {} : { activeMs }) };
 }
 
 async function onRun(request: Request, env: Env, deviceId: string, run: string, action: string): Promise<Response> {
@@ -127,11 +137,12 @@ async function onRun(request: Request, env: Env, deviceId: string, run: string, 
     return json(429, { error: "rate_limited" });
   }
   let answer: Answer | null;
-  if (batch) answer = await stub.moves(playerId, batch.from, batch.moves, now);
+  if (batch) answer = await stub.moves(playerId, batch.from, batch.moves, now, batch.activeMs);
   else if (action === "hint") {
-    // `{ "hints": <used so far> }` makes a resent hint safe; an empty body is a new hint, as before.
+    // `{ "hints": <used so far>, "activeMs"? }` makes a resent hint safe; an empty body is a new hint, as before.
     const text = await request.text();
     let seen: number | undefined;
+    let activeMs: number | undefined;
     if (text.trim() !== "") {
       let body: unknown;
       try {
@@ -142,10 +153,20 @@ async function onRun(request: Request, env: Env, deviceId: string, run: string, 
       const hints = (body as { hints?: unknown } | null)?.hints;
       if (typeof body !== "object" || body === null || !Number.isInteger(hints) || (hints as number) < 0) return badRequest();
       seen = hints as number;
+      activeMs = activeOf(body);
     }
-    answer = await stub.hint(playerId, now, seen);
+    answer = await stub.hint(playerId, now, seen, activeMs);
+  } else {
+    // `{ "activeMs" }`, or no body (before active time): never refused for its body.
+    const text = await request.text().catch(() => "");
+    let activeMs: number | undefined;
+    try {
+      activeMs = text.trim() === "" || text.length > 200 ? undefined : activeOf(JSON.parse(text));
+    } catch {
+      activeMs = undefined;
+    }
+    answer = await stub.giveUp(playerId, now, activeMs);
   }
-  else answer = await stub.giveUp(playerId, now);
   // Someone else's run, or none, says the same: ids reveal nothing.
   return answer ? json(200, answer) : notFound();
 }

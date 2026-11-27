@@ -21,6 +21,7 @@
                 "timeMs": 125000,
                 "hints": 1,
                 "progress": 1,
+                "percent": 100,
                 "tooFast": false
               },
               "playing": null
@@ -38,6 +39,7 @@
                 "timeMs": 50000,
                 "hints": 0,
                 "progress": 0.25,
+                "percent": 25,
                 "tooFast": false
               },
               "playing": null
@@ -93,6 +95,7 @@
       "timeMs": 125000,
       "hints": 1,
       "progress": 1,
+      "percent": 100,
       "tooFast": false
     }
   },
@@ -132,6 +135,7 @@
       "timeMs": 125000,
       "hints": 1,
       "progress": 1,
+      "percent": 100,
       "tooFast": false
     }
   },

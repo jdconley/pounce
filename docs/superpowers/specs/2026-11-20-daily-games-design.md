@@ -140,7 +140,7 @@ a placeholder too.)*
   rulings and how older apps keep their rules.
 - **Finish.** The run ends solved when every cell holds its answer, or missed on the third wrong
   number ("Out of lives").
-- **Score:** the time, on the server's clock. Hints cost no time.
+- **Score:** the active time (§3, "The clock"). Hints cost no time.
 - **Give up** ends the run, unsolved.
 
 ##### Nine Lives: lives and hints
@@ -188,9 +188,10 @@ cell and added 30 seconds.*
 | Your own and shared streaks (§5) | counts | counts | counts | doesn't |
 | The game's own streak, in stats | counts | counts | counts | ends it |
 | Stats: played / solved | both | played | played | played |
-| The board (§6) | ranked by time | after every solved run, by progress, then time | the same | the same |
+| The board (§6) | ranked by time | after every solved run, by percent, then time | the same | the same |
 | The Dish's points (§6) | its place's points, plus 1 | the same: its place's, plus 1 | the same | its place's only |
-| What the apps call it | the time | "Out of lives" | "Gave up" | "Out of time" |
+| A board row shows | the time | its percent: "62%" | the same | the same |
+| The end screen says | "Solved" | "Out of lives" | "Gave up" | "Out of time" |
 
 - So a failed Nine Lives run is exactly a missed Sniff run: you played, you ended it, it ranks
   after the solvers. *(My call: a loss in the Dish is never worse for streaks than giving up, and
@@ -276,7 +277,7 @@ rules, and must never break.
   - A cousin in New York gets them three hours before you do in California.
   - Each board is for one date and fills in as each time zone reaches it.
 - **A run started on day D belongs to D's board.** It closes when D ends, at 04:00 your time.
-  - A run still open then ends unsolved. It shows on the board that way, but it doesn't count
+  - A run still open then ends unsolved. It shows on the board at its percent (§6, "Ranking"), but it doesn't count
     toward streaks: only a run you finish or give up counts.
   - There's no grace period past 04:00, so a run always ends before its streak day settles (10
     minutes after). Streak settlement doesn't move. *(My call.)*
@@ -336,11 +337,32 @@ rules, and must never break.
     guesses and Box Fort's last piece of a set.
   - A Sniff guess or a hint waits for the answer, which takes about one round trip. Every other
     move shows on the client at once.
-- **The clock** is the server's: from the start to the move that ends the run.
-  - There is no pause. A phone call costs time.
-  - Pausing can't be checked: the client could keep looking. The puzzles are meant to take two to
-    eight minutes *(my call, for JD to check)*.
-- **The result** is worked out only by the server: solved or not, time, guesses, points, hints.
+- **The clock is active time** (JD, 2026-11-26: "we should be more friendly with the daily app
+  timers everywhere. just count active time in app looking at the puzzle. not worried about people
+  cheating that."). *This replaces the first rule: the server's clock, from start to end, with no
+  pause.*
+  - A puzzle's clock runs only while the puzzle is on screen and the app is in front. It pauses
+    when the app goes to the background, the screen locks, the player leaves for Home or a menu,
+    or a sheet covers the puzzle. On the web it also pauses while the tab is hidden. It resumes
+    where it left off, on any device.
+  - The time shown while playing, on the end screen, on every board (phone, web and TV) and in
+    stats is this active time, plus a hint's cost where the game has one (Cat Nap, and Nine Lives
+    on its first rules).
+  - **The client counts it and the server trusts it.** Every call on a run (moves, hint, give up)
+    carries `activeMs`. The server checks only that it's sane: a whole number of milliseconds,
+    never less than the run's last one, and never more than the time since the start. Start
+    returns the run's `activeMs`, so a resumed run carries on from there.
+  - What stays on the server's clock: the move budget against bots (§3, "Plausibility") and
+    04:00, when an open run closes at its last active time. The time floors stay, now on active
+    time.
+  - **Apps that don't report it** (1.3 and before) keep showing their own clock. The server
+    estimates their active time from the gaps between their calls, each gap counted up to five
+    minutes, so a puzzle left for dinner costs five minutes, not an hour. *(My call: an old app's
+    time then stands next to a new app's active time without being penalized for walking away.
+    Its end screen shows the estimate, which can read less than its running clock did.)*
+  - A run stored before active time keeps the server's clock.
+- **The result** is worked out by the server: solved or not, guesses, points, hints, percent, and
+  the time from the active time above.
 - **Plausibility.**
   - A run faster than a game's floor (for example, Nine Lives under 45 seconds) is kept, but marked
     too fast and left off the board.
@@ -434,8 +456,34 @@ already has around a deck of cards.
   - their cat and name, and the result: time, guesses or points;
   - a mark for solved, missed or hinted;
   - nothing at all for someone who hasn't played yet;
-  - the order: best first. In Nine Lives, Sniff and Cat Nap, unsolved runs come after solved ones,
-    best progress first. Box Fort ranks by points alone.
+  - the order: best first (below, "Ranking");
+  - for a run that didn't finish, its percent: "62%".
+- **Ranking** (JD, 2026-11-26: "if you fail or quit any puzzle you should get ranked on %
+  completed as well. just lower rank than anyone that completed it."). The server works out the
+  order and each row's `rank`, and every app shows rows in the server's order, so the 1.2 and 1.3
+  apps show this order too, with their own words for the result ("Missed", "Gave up").
+  - **Everyone who finished ranks first,** by the game's own measure: the fastest time (Nine
+    Lives, Cat Nap), the fewest guesses then time (Sniff), the most points then time (Box Fort).
+    Finishing is solving, or for Box Fort, its normal ending: out of room, or the last set placed.
+  - **Then everyone who didn't,** together: out of lives, out of guesses, given up, or left open
+    when the day turned over at 04:00 (closed). By percent, highest first, then the shorter time.
+    The same percent and time share a rank.
+  - **Percent, per game** (rounded down, so only a finished run reads 100%):
+    | Game | Percent of |
+    |---|---|
+    | Nine Lives | the open cells the player filled with the right number |
+    | Cat Nap | the cats on their right cells, out of the quilt's size |
+    | Sniff | the five letters found in their right place, in any guess |
+    | Box Fort | the day's sets of pieces placed |
+  - **Hints don't count toward percent.** *(Ruling.)* A cell or cat a hint filled doesn't count, so
+    a hint never raises a percent; it helps only by getting you to the finish. Wrong numbers and
+    wrong cats don't count either.
+  - **Sniff counts letters found in any guess,** not the best single guess. *(My call: finding the
+    first letter in guess two and the last in guess five is two letters found, and that's how close
+    the player came. It shows nothing about the word beyond a number.)*
+  - Percent is worked out only at the end. While someone plays, the board's live progress stays
+    spoiler-free (cells or cats placed, right or not), so it never tells anyone which are right.
+  - A closed run still doesn't count for streaks (§5), and still earns no Dish point for ending.
 - **Overall: the Dish.**
   - Per game, 3 points for first, 2 for second and 1 for third among the people on your board,
     plus 1 point for each ended run. Ties share the points.

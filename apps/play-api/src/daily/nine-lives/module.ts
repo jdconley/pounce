@@ -99,6 +99,23 @@ function applyWithLives(p: NineLivesPuzzle, s: NineLivesState, m: NineLivesMove)
   return lives === 0 ? { ok: true, state, reveal, end: "missed" } : { ok: true, state, reveal };
 }
 
+/**
+ * How far an unfinished run got, by the fair measure (spec §6, "Ranking"): the cells the player
+ * filled right, out of the cells that started empty. A hinted cell doesn't count, and neither
+ * does a wrong number. Only ever worked out for a result: during play it would say which numbers
+ * are right, so live progress stays `progressOf`, cells filled.
+ */
+function earned(p: NineLivesPuzzle, s: NineLivesState): number {
+  let open = 0;
+  let right = 0;
+  for (let i = 0; i < N; i++) {
+    if (p.givens[i] !== 0) continue;
+    open++;
+    if (s.cells[i] === p.solution[i] && !s.hinted.includes(i)) right++;
+  }
+  return open === 0 ? 1 : right / open;
+}
+
 export const nineLives: DailyModule<NineLivesPuzzle, NineLivesState, NineLivesMove> = {
   id: "nine-lives",
   make: makePuzzle,
@@ -138,7 +155,7 @@ export const nineLives: DailyModule<NineLivesPuzzle, NineLivesState, NineLivesMo
     outcome,
     timeMs,
     hints,
-    progress: outcome === "solved" ? 1 : progressOf(p.givens, s.cells),
+    progress: outcome === "solved" ? 1 : earned(p, s),
   }),
   compare(a: DailyResult, b: DailyResult): number {
     const aSolved = a.outcome === "solved";

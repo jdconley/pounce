@@ -84,6 +84,8 @@ and so is anything else in it. 200:
   the run has ended (below); then show the end screen.
 - `hintMs` is what one hint adds to the run's time: 30 seconds, or 0 under Nine Lives' `"lives"`
   rules. A server before this field always added 30 seconds.
+- `activeMs` is the run's active time so far (below, "Active time"). Count on from it while the
+  puzzle is on screen. A server before this field had none: count from `startedAt`.
 - `run` is unguessable and names no one. Keep it for the calls below.
 - 404 `{ "error": "not_found" }`: an unknown or unlisted game. 429 `{ "error": "rate_limited" }`:
   over 30 starts by this device in an hour.
@@ -91,7 +93,7 @@ and so is anything else in it. 200:
 ### `POST /v1/daily/runs/{run}/moves`
 
 ```json
-{ "from": 0, "moves": [ { "k": "step", "n": 1 }, { "k": "step", "n": 2 } ] }
+{ "from": 0, "moves": [ { "k": "step", "n": 1 }, { "k": "step", "n": 2 } ], "activeMs": 18250 }
 ```
 
 - `from` is the `seq` the batch starts at. `moves` are the game's moves, in order. Nothing else in
@@ -119,7 +121,10 @@ and so is anything else in it. 200:
 ```
 
   - `outcome`: `"solved"`, `"missed"`, `"gaveUp"`, `"closed"` or `"done"` (Box Fort's ending).
-  - `timeMs`: from start to the move that ended it, plus `hintMs` a hint.
+  - `timeMs`: the run's active time when it ended, plus `hintMs` a hint.
+  - `progress` (0 to 1) and `percent` (a whole number, rounded down): how far it got by the game's
+    fair measure, 1 and 100 once finished. Show `percent` for a run that didn't finish ("62%"). A
+    result stored before 2026-11-26 has no `percent`: use `floor(progress * 100)`.
   - `guesses` (Sniff) and `points` (Box Fort) appear only for those games.
   - `tooFast`: faster than the game's floor. Kept, but left off every board.
 
@@ -145,7 +150,7 @@ and so is anything else in it. 200:
 
 ### `POST /v1/daily/runs/{run}/hint`
 
-`{ "hints": <hints used so far> }` (an empty body is accepted, but isn't safe to resend). 200, an
+`{ "hints": <hints used so far>, "activeMs": <active time> }` (an empty body is accepted, but isn't safe to resend). 200, an
 answer as above: `reveals` holds the hint (a cell, a cat), `seq` is unchanged (a hint isn't a move),
 `hints` goes up and the result's time grows by `hintMs`. A game with no hints, or none left,
 answers `illegal`.
@@ -157,8 +162,8 @@ Flush waiting moves first.
 
 ### `POST /v1/daily/runs/{run}/giveup`
 
-No body. 200, an answer with the result, `outcome: "gaveUp"`. A run given up before any move
-doesn't count toward streaks.
+`{ "activeMs": <active time> }`, or no body (before active time). 200, an answer with the result,
+`outcome: "gaveUp"`. A run given up before any move doesn't count toward streaks.
 
 ### `PUT /v1/daily/runs/{run}/tv`
 
@@ -201,9 +206,11 @@ someone else's run.
   who leaves the pair drops off. Nobody who hasn't played appears.
 - **`player`** is `"me"` for the board's owner and the pair id for a connection (the `pair` of
   `GET /v1/me/streaks`). No player id is ever sent.
-- **Per game,** rows with a result come first, ranked by the game's own order (best first; for
-  Nine Lives, Sniff and Cat Nap unsolved after solved, furthest first; Box Fort by points). `rank`
-  is a competition rank: ties share it and the next skips. People playing now follow with
+- **Per game,** rows with a result come first, best first: every finished run (solved, or Box
+  Fort's `done`) by the game's own order (time; Sniff guesses then time; Box Fort points then
+  time), then every other run (`missed`, `gaveUp`, `closed`) by `percent`, highest first, then
+  time (spec §6, "Ranking"). Show rows in the order sent; never sort them. `rank` is a competition
+  rank: ties share it and the next skips. People playing now follow with
   `rank: null` and their progress. Results marked `tooFast` are left off.
 - **The Dish:** per game 3, 2 and 1 points for the first three places (ties share a place's
   points), plus 1 for each ended run (a run closed at 04:00 didn't end). `crowns` lists the games
@@ -321,6 +328,22 @@ Unlink: every TV showing this person's board forgets it, and their sockets close
 - **One run per game and date.** When both had started today's puzzle, the run started first
   stays, with its moves and result; the other run and its result go (its id answers 404), and its
   stats come off. `start` on any of the account's devices then returns the run that stayed.
+
+## Active time
+
+Spec §3, "The clock" (JD, 2026-11-26).
+
+- Count the time the puzzle is on screen with the app in front: pause in the background, on a
+  locked screen, on Home or a menu, under a sheet, and (web) in a hidden tab. Show that time, plus
+  `hintMs` a hint, as the run's clock.
+- Send it as `activeMs` with every moves batch, hint and give-up: the total so far, in whole
+  milliseconds, carrying on from start's `activeMs`.
+- The server trusts it, and keeps it sane: a value that isn't a whole number of 0 or more is
+  ignored, one below the run's last is ignored, and one past the time since the start is cut to
+  it. The result's `timeMs` is the active time at the end.
+- An app that sends none (1.3 and before) gets an estimate: each gap between its calls on the
+  run, counted up to 5 minutes (`IDLE_CAP_MS`).
+- A run open at 04:00 closes at its active time then.
 
 ## Nine Lives
 

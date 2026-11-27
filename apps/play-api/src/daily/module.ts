@@ -15,7 +15,12 @@ export type DailyResult = {
   timeMs: number; hints: number; tooFast: boolean;
   guesses?: number;   // Sniff
   points?: number;    // Box Fort
-  progress: number;   // 0..1, how far an unsolved run got
+  progress: number;   // 0..1, how far the run got by its game's fair measure (spec §6, "Ranking"); 1 when solved
+  /**
+   * `progress` as a whole percent, rounded down: what the boards show for a run that didn't
+   * finish. Every result made from 2026-11-26 has it; one stored before has only `progress`.
+   */
+  percent?: number;
 };
 export type Applied<S> =
   | { ok: true; state: S; reveal?: unknown; end?: "solved" | "missed" | "done" }
@@ -32,8 +37,8 @@ export interface DailyModule<P = unknown, S = unknown, M = unknown> {
   hintMs?(s: S): number;                        // what one hint adds to the time; unset: HINT_PENALTY_MS
   progress(p: P, s: S): number;                 // 0..1, spoiler-free
   publicState(p: P, s: S): unknown;             // what a resuming client and a watching TV get
-  result(p: P, s: S, outcome: Outcome, timeMs: number, hints: number): Omit<DailyResult, "game" | "date" | "number" | "tooFast">;
-  compare(a: DailyResult, b: DailyResult): number; // < 0: a ranks above b
+  result(p: P, s: S, outcome: Outcome, timeMs: number, hints: number): Omit<DailyResult, "game" | "date" | "number" | "tooFast" | "percent">;
+  compare(a: DailyResult, b: DailyResult): number; // < 0: a ranks above b; the board uses it between finished runs only (`rankGame`)
   floorMs: Record<DayLevel, number>;            // faster than this: tooFast
   minMoveGapMs: number;                         // moves closer than this are "too_soon"
 }

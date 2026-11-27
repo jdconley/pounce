@@ -119,6 +119,11 @@ function socket(h: ReturnType<typeof http>) {
 const client = {
   moves: { from: 0, moves: [step(1), step(2)] },
   hint: { hints: 0 },
+  // From 2026-11-26, every call on a run carries the client's active time (spec §3, "The clock").
+  movesActive: { from: 0, moves: [step(1), step(2)], activeMs: 18_250 },
+  hintActive: { hints: 0, activeMs: 31_000 },
+  giveUpActive: { activeMs: 95_500 },
+  startLives: { rules: "lives" },
   tvOn: { on: true },
   tvOff: { on: false },
   linkBoardByToken: { token: "Tm90QVJlYWxMaW5rVG9rZW", board: true },

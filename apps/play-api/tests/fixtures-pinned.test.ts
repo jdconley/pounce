@@ -75,12 +75,13 @@ test("no tile game sample mentions Birdwatch or table options", () => {
  * to one is a change to the wire, made here on purpose.
  */
 const PINNED_DAILY: Record<string, string> = {
-  // 2026-11-26: start gained `hintMs` (Nine Lives' free hints), additive.
-  "daily/protocol/http.json": "8878ff9f99f604ba40f201bb47be44b3d8ad1c34bac49828124cfa31d4ee804e",
-  "daily/protocol/socket.json": "72d91ed27f5c0dc61fe146d7660f8c7c934a8214540c7050ef161428e6523eb8",
-  "daily/protocol/client.json": "7a1625a24ca580670080d50bab5c6344ffb95cfc00d5682f60c2fdc0e7b02c9f",
-  // 2026-11-26: Nine Lives' "lives" rules (docs/daily-protocol.md "## Nine Lives").
-  "daily/protocol/nine-lives.json": "f236dcc911c7637eed945bc2f95ed482b963a1c37d6de9f2aea1bcd447c0a1a7",
+  // 2026-11-26, all additive: start gained `hintMs` and `activeMs`, results `percent`, and each
+  // call on a run an optional `activeMs` (JD: active time, ranking by percent); Nine Lives' "lives"
+  // rules got their own samples (docs/daily-protocol.md "## Nine Lives").
+  "daily/protocol/http.json": "b7d3a629e6f7adeb80b3571c4acedecbc6af7ef3d41cfcc0551127305cb7b0ac",
+  "daily/protocol/socket.json": "a9a604530a6a945ce1c9365c6b4de017e4f0dca67571a2d4bfd7a0161b7e7e58",
+  "daily/protocol/client.json": "fd7f3a6583423450b1edde3ffc2b2b3d7c321c12a048bb6d2c42a22e7bceebea",
+  "daily/protocol/nine-lives.json": "9a9cf63ca6b8f7d607a01fa0aaf6bebf5091699a7901c7df2731be758a59bb3c",
 };
 
 test.each(Object.entries(PINNED_DAILY))("fixtures/%s is byte for byte what the Dish's clients decode", (file, sha256) => {

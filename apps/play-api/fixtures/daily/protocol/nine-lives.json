@@ -182,7 +182,8 @@
     "hints": 0,
     "result": null,
     "closesAt": 1795521600000,
-    "hintMs": 30000
+    "hintMs": 30000,
+    "activeMs": 0
   },
   "start": {
     "run": "Xq3vL0bNw8sJ2kT9yH4mR6pD1cF7gA5eZuWiOoKnBlM",
@@ -371,7 +372,8 @@
     "hints": 0,
     "result": null,
     "closesAt": 1795521600000,
-    "hintMs": 0
+    "hintMs": 0,
+    "activeMs": 0
   },
   "movesRight": {
     "ok": true,
@@ -600,7 +602,8 @@
     "hints": 1,
     "result": null,
     "closesAt": 1795521600000,
-    "hintMs": 0
+    "hintMs": 0,
+    "activeMs": 35000
   },
   "hintNoneLeft": {
     "ok": false,
@@ -716,7 +719,8 @@
       "outcome": "missed",
       "timeMs": 90000,
       "hints": 3,
-      "progress": 0.0851063829787234,
+      "progress": 0.02127659574468085,
+      "percent": 2,
       "tooFast": false
     }
   },
@@ -1012,11 +1016,13 @@
       "outcome": "missed",
       "timeMs": 90000,
       "hints": 3,
-      "progress": 0.0851063829787234,
+      "progress": 0.02127659574468085,
+      "percent": 2,
       "tooFast": false
     },
     "closesAt": 1795521600000,
-    "hintMs": 0
+    "hintMs": 0,
+    "activeMs": 90000
   },
   "movesClear": {
     "ok": false,

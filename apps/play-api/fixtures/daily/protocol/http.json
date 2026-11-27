@@ -17,7 +17,8 @@
     "hints": 0,
     "result": null,
     "closesAt": 1795521600000,
-    "hintMs": 30000
+    "hintMs": 30000,
+    "activeMs": 0
   },
   "resumed": {
     "run": "Xq3vL0bNw8sJ2kT9yH4mR6pD1cF7gA5eZuWiOoKnBlM",
@@ -37,7 +38,8 @@
     "hints": 0,
     "result": null,
     "closesAt": 1795521600000,
-    "hintMs": 30000
+    "hintMs": 30000,
+    "activeMs": 25000
   },
   "movesOk": {
     "ok": true,
@@ -59,6 +61,7 @@
       "timeMs": 125000,
       "hints": 1,
       "progress": 1,
+      "percent": 100,
       "tooFast": false
     }
   },
@@ -104,6 +107,7 @@
       "timeMs": 50000,
       "hints": 0,
       "progress": 0.25,
+      "percent": 25,
       "tooFast": false
     }
   },
@@ -127,6 +131,7 @@
               "timeMs": 125000,
               "hints": 1,
               "progress": 1,
+              "percent": 100,
               "tooFast": false
             },
             "playing": null
@@ -144,6 +149,7 @@
               "timeMs": 50000,
               "hints": 0,
               "progress": 0.25,
+              "percent": 25,
               "tooFast": false
             },
             "playing": null
@@ -215,6 +221,7 @@
               "timeMs": 125000,
               "hints": 1,
               "progress": 1,
+              "percent": 100,
               "tooFast": false
             }
           }

@@ -657,3 +657,29 @@ describe("Nine Lives' lives, through the routes (spec, \"Nine Lives: lives and h
     }
   }, 30_000);
 });
+
+describe("active time through the routes (spec §3, \"The clock\", JD 2026-11-26)", () => {
+  test("moves, hints and give-ups carry the client's active time; the result's time is it, plus hints", async () => {
+    const mf = await start();
+    const { device, person } = await someone(mf);
+    const s = await begin(mf, device, person);
+    expect(s).toMatchObject({ activeMs: expect.any(Number) });
+    const a = await send(mf, device, person, s.run, { from: 0, moves: steps(1, 1), activeMs: 0 });
+    expect(a.status).toBe(200);
+    const hint = await call(mf, device, "POST", `/v1/daily/runs/${s.run}/hint?person=${person.id}`, { hints: 0, activeMs: 1 });
+    expect(hint.status).toBe(200);
+    // 2 ms on screen: less than the wall's time since the start, so it can only be the report.
+    const gave = await call(mf, device, "POST", `/v1/daily/runs/${s.run}/giveup?person=${person.id}`, { activeMs: 2 });
+    expect(await gave.json()).toMatchObject({ ok: true, result: { outcome: "gaveUp", timeMs: 2 + 30_000, hints: 1, percent: expect.any(Number) } });
+  });
+
+  test("a give-up with no body, or an odd one, still gives up", async () => {
+    const mf = await start();
+    for (const body of [undefined, "nope", { activeMs: -5 }]) {
+      const { device, person } = await someone(mf);
+      const s = await begin(mf, device, person);
+      const res = await call(mf, device, "POST", `/v1/daily/runs/${s.run}/giveup?person=${person.id}`, body);
+      expect(await res.json()).toMatchObject({ ok: true, result: { outcome: "gaveUp" } });
+    }
+  });
+});

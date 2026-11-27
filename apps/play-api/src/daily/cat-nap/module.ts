@@ -26,6 +26,14 @@ const solvedBy = (p: NapPuzzle, s: NapState): boolean => {
 
 const unsolved = (r: DailyResult): number => (r.outcome === "solved" ? 0 : 1);
 
+/**
+ * How far an unfinished run got, by the fair measure (spec §6, "Ranking"): cats on their
+ * solution cells, out of the quilt's size, less any a hint placed. Only for a result: live
+ * progress (`catsPlaced`) never says which cats are right.
+ */
+const catsRight = (p: NapPuzzle, s: NapState): number =>
+  p.solution.filter((c, r) => s.cells[r * p.n + c] === 2 && !s.hinted.includes(r * p.n + c)).length;
+
 export const catNap: DailyModule<NapPuzzle, NapState, NapMove> = {
   id: "cat-nap",
   make: (rng, level) => makeNap(rng, level),
@@ -45,7 +53,7 @@ export const catNap: DailyModule<NapPuzzle, NapState, NapMove> = {
   },
   progress: (p, s) => catsPlaced(p, s) / p.n,
   publicState: (_p, s) => s,
-  result: (p, s, outcome, timeMs, hints) => ({ outcome, timeMs, hints, progress: catsPlaced(p, s) / p.n }),
+  result: (p, s, outcome, timeMs, hints) => ({ outcome, timeMs, hints, progress: outcome === "solved" ? 1 : catsRight(p, s) / p.n }),
   compare(a, b) {
     return unsolved(a) - unsolved(b) || (unsolved(a) ? b.progress - a.progress : 0) || a.timeMs - b.timeMs;
   },

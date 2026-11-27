@@ -21,7 +21,6 @@ const FLOOR_MS = 5000;
 
 const solved = (s: SniffState) => s.guesses.some((g) => g.marks.every((m) => m === "spot"));
 const ended = (s: SniffState) => solved(s) || s.guesses.length >= TRIES;
-const spots = (g: Guess) => g.marks.filter((m) => m === "spot").length;
 
 /** Ranks a result: solved first, then by fewest guesses; unsolved by how close they got. */
 function rank(r: DailyResult): number[] {
@@ -77,9 +76,14 @@ export const sniff: DailyModule<SniffPuzzle, SniffState, SniffMove> = {
     return ended(s) ? { guesses: s.guesses, answer: p.answer } : { guesses: s.guesses };
   },
 
+  /**
+   * How far a miss got, by the fair measure (spec §6, "Ranking"): the letters found in their right
+   * place in any guess, out of five. Finding the first letter in guess two and the last in guess
+   * five is two letters found, even though no one guess had both.
+   */
   result(_p, s, outcome, timeMs, hints) {
-    const best = Math.max(0, ...s.guesses.map(spots));
-    return { outcome, timeMs, hints, guesses: s.guesses.length, progress: outcome === "solved" ? 1 : best / LETTERS };
+    const found = Array.from({ length: LETTERS }, (_, i) => s.guesses.some((g) => g.marks[i] === "spot")).filter(Boolean).length;
+    return { outcome, timeMs, hints, guesses: s.guesses.length, progress: outcome === "solved" ? 1 : found / LETTERS };
   },
 
   compare(a, b) {

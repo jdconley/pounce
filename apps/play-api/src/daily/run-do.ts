@@ -108,17 +108,18 @@ export class DailyRun extends DurableObject<Env> {
     this.ctx.waitUntil(this.told);
   }
 
-  async moves(playerId: string, from: number, raw: unknown[], now: number): Promise<Answer | null> {
-    return this.act(playerId, now, (m, s) => moves(m, s.puzzle, s.run, from, raw, now));
+  /** `activeMs`: the client's active time, when it reports one. */
+  async moves(playerId: string, from: number, raw: unknown[], now: number, activeMs?: number): Promise<Answer | null> {
+    return this.act(playerId, now, (m, s) => moves(m, s.puzzle, s.run, from, raw, now, activeMs));
   }
 
   /** `seen`: the hints the client had used when it asked, so a resent hint is answered once. */
-  async hint(playerId: string, now: number, seen?: number): Promise<Answer | null> {
-    return this.act(playerId, now, (m, s) => useHint(m, s.puzzle, s.run, now, seen));
+  async hint(playerId: string, now: number, seen?: number, activeMs?: number): Promise<Answer | null> {
+    return this.act(playerId, now, (m, s) => useHint(m, s.puzzle, s.run, now, seen, activeMs));
   }
 
-  async giveUp(playerId: string, now: number): Promise<Answer | null> {
-    return this.act(playerId, now, (m, s) => giveUp(m, s.puzzle, s.run, now));
+  async giveUp(playerId: string, now: number, activeMs?: number): Promise<Answer | null> {
+    return this.act(playerId, now, (m, s) => giveUp(m, s.puzzle, s.run, now, activeMs));
   }
 
   /**
