@@ -44,3 +44,24 @@ export function take(w: Window | null, now: number, max: number, windowMs: numbe
   const window = w && now - w.start < windowMs ? { count: w.count + 1, start: w.start } : { count: 1, start: now };
   return { window, ok: window.count <= max };
 }
+
+/**
+ * The address a guess is counted against: an IPv4 address as it is, an IPv6 one by its /64, which
+ * a household or a phone gets whole, so stepping through its own addresses buys no more guesses.
+ * Anything else (no address, a malformed one) as it is.
+ */
+export function ipBucket(ip: string): string {
+  if (!ip.includes(":") || ip.includes(".")) return ip;
+  const halves = ip.toLowerCase().split("::");
+  if (halves.length > 2) return ip;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves[1] ? halves[1].split(":") : [];
+  const gap = 8 - head.length - tail.length;
+  if (halves.length === 2 ? gap < 1 : gap !== 0) return ip;
+  const groups = [...head, ...Array<string>(halves.length === 2 ? gap : 0).fill("0"), ...tail];
+  if (!groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return ip;
+  return `${groups
+    .slice(0, 4)
+    .map((g) => g.replace(/^0+(?=.)/, ""))
+    .join(":")}::/64`;
+}

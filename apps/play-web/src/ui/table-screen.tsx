@@ -267,7 +267,7 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
                   <span class="grow">Show on TV</span>
                 </button>
               ) : null}
-              {isBird && room.options ? (
+              {isBird && room.options && "rules" in room.options ? (
                 <button type="button" class="row" onClick={() => setMenu("howto")}>
                   <Icon name="icon-play" size={32} />
                   <span class="grow">How to play</span>
@@ -293,7 +293,7 @@ export function TableScreen(props: { code: string; intent: TableIntent; say?: (w
           </Sheet>
         ) : null}
         {menu === "scores" ? isBird && room.birdwatch ? <ScoreSheet room={room} onClose={() => setMenu(null)} /> : <ScoresSheet room={room} onClose={() => setMenu(null)} /> : null}
-        {menu === "howto" && room.options ? <BwHowTo rules={room.options.rules} onClose={() => setMenu(null)} /> : null}
+        {menu === "howto" && room.options && "rules" in room.options ? <BwHowTo rules={room.options.rules} onClose={() => setMenu(null)} /> : null}
         {menu === "forfeit" ? (
           <Sheet title="Forfeit this game?" onClose={() => setMenu(null)}>
             <div class="sheet-actions">

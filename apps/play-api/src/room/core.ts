@@ -5,7 +5,7 @@ import {
   type GameAction,
   type GameError,
   type GameId,
-  type GameOptions,
+  type AnyGameOptions,
   type RoomOptions,
   type RoomGame,
 } from "../games";
@@ -14,12 +14,12 @@ import { PROTOCOL_VERSION } from "../protocol";
 import { DEFAULT_BACK, DEFAULT_RUG } from "../streaks/catalog";
 import { LAG_MS, TumbleRound, type RoundOut, type RoundSeat } from "../tumble/round";
 
-import { newMoveCode } from "./codes";
+import { newMoveCode, newNearKey, typedNear } from "./codes";
 import { LINK_PING_MS, LinkTracker } from "./link";
-import { LiveRelay } from "./live-relay";
+import { LiveRelay, LiveStream } from "./live-relay";
 import { defaultRoomName } from "./names";
 
-import type { GameModule } from "../games/module";
+import type { GameModule, LiveRules } from "../games/module";
 import type { TumbleAction, TumbleState } from "../games/tumble";
 import type {
   ClientMessage,
@@ -103,7 +103,19 @@ export type RoomState<S = CatTowerState> = {
   moveFailures: Record<string, { count: number; windowStart: number }>;
   /** Lobby renames (table and seats) per device, within a rolling window. Absent: none yet. */
   renames?: Record<string, { count: number; windowStart: number }>;
-  timers: { botAt: number | null; nextRoundAt: number | null; cleanupAt: number };
+  timers: {
+    botAt: number | null;
+    nextRoundAt: number | null;
+    cleanupAt: number;
+    /** When the turn's clock runs out; null while paused, between turns and in games without clocks. Absent in older rooms. */
+    turnEndsAt?: number | null;
+    /** The clock's time left while the screen is away; null while it runs. Absent in older rooms. */
+    pausedLeftMs?: number | null;
+    /** When the clock was paused, for the stalled end. */
+    pausedAt?: number | null;
+    /** The turn and limit the clock was started for: a new key starts it afresh. */
+    clockKey?: string | null;
+  };
   /** "<round>:<turn>:<turnSeq>" dedupe key for turn pushes. */
   pushedForTurn: string | null;
   /** The turn whose push the player's other devices were last told to clear. Absent in older rooms. */
@@ -140,7 +152,37 @@ export type RoomState<S = CatTowerState> = {
   screens?: string[];
   /** When the last connected screen went, while within the grace. A screen back by then changes nothing. */
   screenLeftAt?: number;
+  /**
+   * A game with ink (Purrtrait): the device that owns this drawing turn, the first to act for the
+   * seat on the move (its `choose`). Only it sees the word, draws and ends the turn. A device id,
+   * not a drawing: the ink itself is never stored. Absent: no device yet, or no such game.
+   */
+  drawerDevice?: { turn: string; deviceId: string };
+  /**
+   * A same-room table (Purrtrait, design §5.2): the near keys its screen shows, current first,
+   * then the previous one, and when each was minted. Kept here, not in memory, so a room woken
+   * from hibernation still takes the key on the TV. Absent: none minted yet, or no such game.
+   */
+  nearKeys?: { key: string; at: number }[];
+  /**
+   * Wrong near guesses since the current key was minted (`at` is that key's): at
+   * `NEAR_TYPED_MISSES`, only the QR's whole key is taken until the next key. Absent: none.
+   */
+  nearMisses?: { at: number; count: number };
+  /**
+   * A same-room table dealt by Play again: the devices that were at the old one, members here
+   * with no near key, as they were there. Absent: none, or no such game.
+   */
+  members?: string[];
+  /**
+   * A same-room table (design §10.2): the devices and players its host removed. They stay out,
+   * at this table and the ones Play again deals from it. Absent: nobody removed.
+   */
+  removed?: Removed;
 };
+
+/** Who a same-room table's host removed: device ids, and players (whatever device they come back on). */
+export type Removed = { devices: string[]; players: string[] };
 
 export type Look = { rug: string; back: string };
 
@@ -218,6 +260,10 @@ export type RematchIntent = {
   options?: RoomOptions;
   /** The table's screens, so a TV stays on the new table. Absent: none. */
   screens?: string[];
+  /** A same-room table's devices other than its screens: members of the new table without a near key. Absent: none. */
+  members?: string[];
+  /** A same-room table's removed devices and players: still out at the new table. Absent: none. */
+  removed?: Removed;
 };
 
 /** The card backs and rugs the people a device speaks for have unlocked. */
@@ -305,6 +351,16 @@ export const RETIRE_WARNING_MS = MS_PER_DAY;
  * phones aren't told and told again (divided by the dev speed).
  */
 export const SCREEN_GRACE_MS = 10_000;
+/** A turn clock paused this long (no screen) ends the game as stalled (divided by the dev speed). */
+export const STALL_END_MS = 30 * MS_PER_MINUTE;
+/** A same-room table's screen shows a new near key this often; each is good for two of these at most. */
+export const NEAR_KEY_MS = 30_000;
+/**
+ * Wrong near guesses at one table within one key's time before its typed codes stop working until
+ * the next key (the QR's whole key still does): 3 typed characters are few enough to guess at
+ * from many addresses.
+ */
+export const NEAR_TYPED_MISSES = 30;
 
 /** Most aims a device may send in a second; more are dropped. */
 export const AIM_PER_SECOND = 10;
@@ -316,6 +372,8 @@ const MAX_MOVE_FAILURES = 5;
 export const RENAMES_PER_WINDOW = 5;
 export const RENAME_WINDOW_MS = MS_PER_MINUTE;
 const UINT32_RANGE = 2 ** 32;
+const INK_RESEND = (turn: string): ServerMessage => ({ t: "inkResend", turn });
+type InkOps = Extract<ServerMessage, { t: "inkSync" }>["ops"];
 const BOT_DELAY_MS = 1200;
 const NEXT_ROUND_DELAY_MS = 6000;
 const ASLEEP_AFTER_MS = 5 * MS_PER_MINUTE;
@@ -326,6 +384,8 @@ const LOOK_EVERY_MS = 10_000;
 const NO_UNLOCKS: Unlocks = { backs: [], rugs: [] };
 /** Move ids remembered per device: far more than one app ever has in flight. */
 const ACKS_KEPT = 16;
+/** What a same-room table answers `not_allowed` (ruling 14): seat moves by code, nudges and retiring. */
+const SAME_ROOM_REFUSED: ReadonlySet<ClientMessage["t"]> = new Set(["moveSeat", "claimMove", "nudge", "retire"]);
 /** A turn has to be this old before anyone may nudge it (divided by the dev speed). */
 export const NUDGE_AFTER_MS = 2 * MS_PER_MINUTE;
 /** Between two nudges from the same seat at a table, on any turns (divided by the dev speed). */
@@ -370,6 +430,12 @@ export class RoomCore<S = CatTowerState> {
   private readonly aimTimes = new Map<string, number[]>();
   /** Per device and seat (not persisted): the last aim message relayed was an aim, not a clear. */
   private readonly lastWasAim = new Map<string, boolean>();
+  /** The turn's live stream (Purrtrait's ink), in memory only (design §6.5): never in `state`. Null for a game without one. */
+  private readonly inkStream: LiveStream<unknown, unknown> | null;
+  /** The live ink turn whose drawer was told the easel is full: once a turn. */
+  private inkFullTold: string | null = null;
+  /** Devices whose age band is a kitten's. The Durable Object sets it before each connect; not persisted. */
+  private readonly kittens = new Set<string>();
   /** Toy Tumble's round, from its countdown to its end. Never persisted: a restart replays it. */
   private round: TumbleRound | null = null;
   /** Per seat, this round: the one socket that writes its box, and when it was last heard. */
@@ -396,6 +462,17 @@ export class RoomCore<S = CatTowerState> {
     this.game = game ?? (gameModule(state.game) as RoomGame<S>);
     this.speed = speed;
     this.features = features;
+    const stream = this.game.stream;
+    this.inkStream = null;
+    if (stream) {
+      const relay = new LiveStream<unknown, unknown>({ perSecond: stream.perSecond, start: (rebuilt) => stream.start(rebuilt), compact: (log) => stream.compact(log) }, now);
+      this.inkStream = relay;
+      const live = this.inkKey();
+      // Built from storage mid-drawing: once a device owns the turn, its drawing is gone (it is
+      // never stored) until it sends it again (`rebuilt`). Before that there was none to lose.
+      if (live !== null && this.turnDevice() !== null) relay.lost(live);
+      else relay.follow(live);
+    }
   }
 
   /**
@@ -445,6 +522,8 @@ export class RoomCore<S = CatTowerState> {
   static rematchState<S = CatTowerState>(code: string, spec: RematchIntent, now: number): RoomState<S> {
     const state = RoomCore.create<S>(code, spec.hostDeviceId, now, spec.name, spec.look, spec.game);
     if (spec.screens) state.screens = [...spec.screens];
+    if (spec.members?.length) state.members = [...spec.members];
+    if (spec.removed) state.removed = { devices: [...spec.removed.devices], players: [...spec.removed.players] };
     if (spec.options) state.options = { ...spec.options };
     state.seats = [
       ...spec.seats.map((s) => ({ ...s })),
@@ -454,16 +533,17 @@ export class RoomCore<S = CatTowerState> {
   }
 
   /** The room's game's own check of an `act` message's action (`parseClientMessage`). */
-  parseAction = (raw: unknown): GameAction | null => this.game.parseAction(raw) as GameAction | null;
+  parseAction = (raw: unknown): GameAction | null =>
+    (this.game.parseAction(raw) ?? this.game.parseRoomAction?.(raw) ?? null) as GameAction | null;
 
   /** The room's game's own check of an `aim` message's aim (`parseClientMessage`). */
   parseAim = (raw: unknown): GameAim | null => this.game.parseAim(raw);
 
   /**
    * The room's game's own check of a `setOptions` message's options: none for a game without any.
-   * Toy Tumble's pass as the wire's `GameOptions` (see `RoomOptions`).
+   * Toy Tumble's pass as the wire's `AnyGameOptions` (see `RoomOptions`).
    */
-  parseOptions =(raw: unknown): GameOptions | null => (this.game.parseOptions?.(raw) ?? null) as GameOptions | null;
+  parseOptions = (raw: unknown): AnyGameOptions | null => (this.game.parseOptions?.(raw) ?? null) as AnyGameOptions | null;
 
   /** The seat that must act next; null in the lobby and whenever nobody is to act. */
   actor(): Seat | null {
@@ -523,11 +603,158 @@ export class RoomCore<S = CatTowerState> {
   /**
    * Lists a device as a screen here before it connects (a link); callers check `mayScreen` first.
    * A device already here as a watcher loses the players it sent: a screen speaks for nobody.
+   *
+   * A same-room table has one screen (design §5.1): the new one takes the old one's place, and
+   * the old one is a stranger from then on, so its sockets are to be closed. Returns those devices,
+   * and what their leaving tells the room.
+   * The phones keep the TV layout for the grace, while the new TV opens its socket.
    */
-  addScreen(deviceId: string): void {
+  addScreen(deviceId: string): { replaced: string[]; out: Outbound[] } {
+    const replaced = this.sameRoom() ? (this.state.screens ?? []).filter((id) => id !== deviceId) : [];
+    const out: Outbound[] = [];
+    for (const id of replaced) {
+      // Gone as a screen that left, so the grace and the clock's pause run as for any TV away.
+      out.push(...this.disconnect(id));
+      delete this.state.devices[id];
+    }
+    if (replaced.length > 0) this.state.screens = this.state.screens?.filter((id) => id === deviceId);
     if (!this.isScreen(deviceId)) this.state.screens = [...(this.state.screens ?? []), deviceId];
     const device = this.state.devices[deviceId];
     if (device) delete device.players;
+    return { replaced, out };
+  }
+
+  /** The room's game is same-room only (Purrtrait): screen-made, one screen, joined by near key. */
+  sameRoom(): boolean {
+    return this.game.sameRoom === true;
+  }
+
+  /** The host removed this device (design §10.2): its sockets are refused, with a fresh near key too. */
+  isRemoved(deviceId: string): boolean {
+    return this.state.removed?.devices.includes(deviceId) ?? false;
+  }
+
+  /** The seat's person was removed: its player, or for a seat with no player, its device. */
+  private removedSeat(s: SeatInfo): boolean {
+    const removed = this.state.removed;
+    if (!removed) return false;
+    return s.playerId === undefined ? removed.devices.includes(s.deviceId as string) : removed.players.includes(s.playerId);
+  }
+
+  /**
+   * Whether the device, speaking for `players`, holds a seat here that its host didn't remove,
+   * other than `except`. A seat out of the game (its person left) still counts: it is theirs.
+   */
+  private keepsSeat(deviceId: string, players: Record<string, string>, except?: Seat): boolean {
+    const speaks = Object.values(players);
+    return this.state.seats.some(
+      (s, i) => i !== except && !this.removedSeat(s) && (s.playerId === undefined ? s.deviceId === deviceId : speaks.includes(s.playerId)),
+    );
+  }
+
+  /**
+   * The one rule for who is out at a same-room table (design §10.2): a device the host removed,
+   * or one that comes as a removed player and holds no seat here that wasn't removed. A shared
+   * phone with another seat, in the game or out of it, stays; its removed player can't sit.
+   * `players`: whom it speaks for (an upgrade's header); left out, its record's. The room refuses
+   * its upgrades, leaves it off Play again and off the tables lists.
+   */
+  turnedAway(deviceId: string, players: Record<string, string> = this.state.devices[deviceId]?.players ?? {}): boolean {
+    if (this.isRemoved(deviceId)) return true;
+    const removed = this.state.removed?.players ?? [];
+    return Object.values(players).some((p) => removed.includes(p)) && !this.keepsSeat(deviceId, players);
+  }
+
+  /**
+   * How well the room knows a device that asks to join, for the guard on joining by code: a
+   * `member` (a screen here, the host, a seat's device, or one that has been here before) needs
+   * nothing more. A stranger at a same-room table without a live near key is `not_near`: counted
+   * as a wrong guess. A device that asks to be a screen is never let in by a key; the room tells
+   * it whether it is one. Nor is an app whose `games` (its `X-Pounce-Games`) can't draw this
+   * table's: the room tells it there is no such table, and asks it to update.
+   */
+  knows(deviceId: string, near: string | null, screen: boolean, games?: readonly string[]): "member" | "exists" | "not_near" {
+    const { state } = this;
+    // A removed device needs no key to be told so: the room refuses it (`isRemoved`), uncounted.
+    const member =
+      this.isRemoved(deviceId) ||
+      this.isScreen(deviceId) ||
+      deviceId === state.hostDeviceId ||
+      state.devices[deviceId] !== undefined ||
+      (state.members?.includes(deviceId) ?? false) ||
+      this.controlledSeats(deviceId).length > 0;
+    if (member) return "member";
+    if (!this.sameRoom() || screen || (games !== undefined && !games.includes(state.game))) return "exists";
+    return this.nearLive(near) ? "exists" : "not_near";
+  }
+
+  /** A wrong near guess at this table (the join guard's, or `/e/`'s): counted for the current key's time. */
+  noteNearMiss(): void {
+    const at = this.state.nearKeys?.[0]?.at ?? 0;
+    const prior = this.state.nearMisses;
+    this.state.nearMisses = { at, count: prior?.at === at ? prior.count + 1 : 1 };
+  }
+
+  /** Too many wrong guesses within the current key's time: only the QR's whole key is taken. */
+  private typedClosed(): boolean {
+    const misses = this.state.nearMisses;
+    return misses !== undefined && misses.at === (this.state.nearKeys?.[0]?.at ?? 0) && misses.count >= NEAR_TYPED_MISSES;
+  }
+
+  /** Near keys are minted and taken only while the table is in its lobby or a game. */
+  private nearOpen(): boolean {
+    return this.sameRoom() && this.state.status !== "over";
+  }
+
+  /** The keys still good now: each for two periods from its mint, however late an alarm. */
+  private liveNearKeys(): { key: string; at: number }[] {
+    if (!this.nearOpen()) return [];
+    const life = (2 * NEAR_KEY_MS) / this.speed;
+    return (this.state.nearKeys ?? []).filter((k) => this.now() < k.at + life);
+  }
+
+  /** Whether `near`, a key off the TV's QR or the 8 characters typed from it, is good now. */
+  nearLive(near: string | null): boolean {
+    if (near === null) return false;
+    const asked = near.toUpperCase();
+    const typed = !this.typedClosed();
+    return this.liveNearKeys().some((k) => asked === k.key || (typed && asked === typedNear(this.state.code, k.key)));
+  }
+
+  /** When the screen's next key is due; null while there is no screen to show one. */
+  private nearDue(): number | null {
+    if (!this.nearOpen() || !this.screenConnected()) return null;
+    const current = this.state.nearKeys?.[0];
+    return current === undefined ? this.now() : current.at + NEAR_KEY_MS / this.speed;
+  }
+
+  /** Mints the screen's next key when one is due. True when it did: the screen needs a snapshot. */
+  private rotateNear(): boolean {
+    const due = this.nearDue();
+    if (due === null || due > this.now()) return false;
+    const fresh = { key: newNearKey(this.rng), at: this.now() };
+    // The previous key stays only while it is still good: a TV away for a while brings none back.
+    this.state.nearKeys = [fresh, ...this.liveNearKeys().slice(0, 1)];
+    // A new key's time begins with no wrong guesses: typing works again.
+    delete this.state.nearMisses;
+    return true;
+  }
+
+  /** The screen's view of its near key, for its snapshot alone. */
+  private nearField(deviceId: string): Pick<RoomView, "near"> {
+    if (!this.isScreen(deviceId)) return {};
+    // The newest key, while it is good: a previous one outlives no current one.
+    const current = this.liveNearKeys()[0];
+    if (current === undefined) return {};
+    const expiresIn = Math.max(0, current.at + NEAR_KEY_MS / this.speed - this.now());
+    return { near: { key: current.key, code: typedNear(this.state.code, current.key), expiresIn } };
+  }
+
+  /** Each connected screen's own snapshot (a new near key), at the current seq. */
+  private screenSnapshots(): Outbound[] {
+    return Object.entries(this.state.devices)
+      .filter(([id, device]) => device.connected && this.isScreen(id))
+      .map(([id]) => ({ to: id, message: this.snapshotFor(id) }));
   }
 
   private screenConnected(): boolean {
@@ -565,17 +792,85 @@ export class RoomCore<S = CatTowerState> {
     this.link.connected(deviceId, this.now());
     // Back at the table in the app: its live table goes (§11.3).
     this.endLive(deviceId, "back");
+    // A screen that comes back gets a fresh near key in its snapshot; a phone's connect that
+    // finds one due passes it on to the screen.
+    const minted = this.rotateNear() && !this.isScreen(deviceId) ? this.screenSnapshots() : [];
     if (this.isScreen(deviceId)) {
       // Always: a mark left past the grace would keep an overdue alarm.
       delete this.state.screenLeftAt;
+      this.syncClock();
       // Not `touch`: a TV looking in doesn't keep the table from closing.
       // Back within the grace, the phones were never told it went.
       if (!wasShown && this.features.tv) {
         this.state.seq += 1;
-        return [...events, ...this.linkCheck(deviceId), ...this.snapshots(), ...this.tumbleConnected(deviceId)];
+        return [...events, ...this.linkCheck(deviceId), ...this.snapshots(), ...this.inkOnConnect(deviceId), ...this.tumbleConnected(deviceId)];
       }
     }
-    return [...events, ...this.linkCheck(deviceId), { to: deviceId, message: this.snapshotFor(deviceId) }, ...this.tumbleConnected(deviceId)];
+    return [...events, ...this.linkCheck(deviceId), { to: deviceId, message: this.snapshotFor(deviceId) }, ...minted, ...this.inkOnConnect(deviceId), ...this.tumbleConnected(deviceId)];
+  }
+
+  /**
+   * Whether the device's age band is a kitten's (ruling 5), as the Durable Object looked it up
+   * before the device connected. Only asked for a game that is `kittenAware`.
+   */
+  setKitten(deviceId: string, kitten: boolean): void {
+    if (kitten) this.kittens.add(deviceId);
+    else this.kittens.delete(deviceId);
+  }
+
+  /** The room's game changes for a kitten's device, so the Durable Object should look up age bands. */
+  wantsAgeBands(): boolean {
+    return this.game.kittenAware === true;
+  }
+
+  /**
+   * A Durable Object just built this room from storage (a wake): if a drawing turn's ink was lost
+   * with the old instance, asks the drawer's device, if it is still connected, to send it again.
+   * A drawer that isn't is asked when it connects.
+   */
+  rebuilt(): Outbound[] {
+    const owner = this.turnDevice();
+    if (this.inkStream === null || owner === null || !this.state.devices[owner]?.connected) return [];
+    return this.inkStream.askResend(owner, INK_RESEND);
+  }
+
+  /** A screen, or the drawing turn's device, connecting mid-drawing: the drawing so far, or a request for it if the room lost it. */
+  private inkOnConnect(deviceId: string): Outbound[] {
+    const relay = this.inkStream;
+    if (relay === null) return [];
+    const owner = this.turnDevice();
+    if (deviceId === owner && relay.missing) return relay.askResend(deviceId, INK_RESEND);
+    if (deviceId !== owner && !this.isScreen(deviceId)) return [];
+    return relay.catchUp(deviceId, (turn, ops) => ({ t: "inkSync", turn, ops: ops as InkOps }));
+  }
+
+  /** The turn ink is taken for now, or null while nobody draws. Only for a game with a stream. */
+  private inkKey(): string | null {
+    const game = this.state.gameState;
+    return game === null ? null : (this.game.stream as LiveRules<S>).key(game);
+  }
+
+  /** Whether the Durable Object last heard the device is a kitten's (kept when a lookup fails). */
+  isKitten(deviceId: string): boolean {
+    return this.kittens.has(deviceId);
+  }
+
+  /** The device that owns this drawing turn, or null while none does (cleared when the turn ends). */
+  private turnDevice(): string | null {
+    return this.state.drawerDevice?.deviceId ?? null;
+  }
+
+  /** The device may see the drawer's word: it owns the drawing turn, or no device does yet. */
+  private ownsDrawing(deviceId: string): boolean {
+    const owner = this.turnDevice();
+    return owner === null || owner === deviceId;
+  }
+
+  /** After every game change: a new turn has no drawing device yet and no ink. */
+  private followInk(): void {
+    const { state } = this;
+    if (state.drawerDevice && state.drawerDevice.turn !== this.turnKey()) delete state.drawerDevice;
+    this.inkStream?.follow(this.inkKey());
   }
 
   /**
@@ -687,6 +982,25 @@ export class RoomCore<S = CatTowerState> {
       out.push(...this.botStep());
     }
 
+    // A screen gone past its grace stops the clock first, so a late alarm never times out a turn
+    // whose screen was already away; then a due deadline, then the stalled end.
+    this.syncClock();
+    if (state.status === "playing" && (timers.turnEndsAt ?? null) !== null && (timers.turnEndsAt as number) <= this.now()) {
+      timers.turnEndsAt = null;
+      // Only a game with `turnLimitMs` has a deadline, and such a game names what a deadline does.
+      out.push(...this.applyAndAfter(this.actor() as Seat, this.game.timeUpAction));
+    }
+    if (
+      state.status === "playing" &&
+      this.game.stall &&
+      (timers.pausedAt ?? null) !== null &&
+      (timers.pausedAt as number) + STALL_END_MS / this.speed <= this.now()
+    ) {
+      const ended = this.game.stall(state.gameState as S);
+      timers.pausedAt = null;
+      out.push(...this.commit(ended.state, ended.events as AnyGameEvent[]), ...this.afterAndSnapshots());
+    }
+
     for (const [deviceId, device] of Object.entries(state.devices)) {
       if (device.presence === "away" && device.since + ASLEEP_AFTER_MS <= this.now()) {
         out.push(
@@ -710,6 +1024,8 @@ export class RoomCore<S = CatTowerState> {
     this.expireLive(this.now());
     out.push(...this.linkCheck());
     this.warnStalled();
+    // The screen's next near key: a snapshot for it alone, since nothing changed for the phones.
+    if (this.rotateNear()) out.push(...this.screenSnapshots());
 
     // A game dealt under the old 7-day limit gets the longer one.
     timers.cleanupAt = Math.max(timers.cleanupAt, state.lastActivity + this.cleanupAfter());
@@ -723,7 +1039,8 @@ export class RoomCore<S = CatTowerState> {
   }
 
   nextAlarm(): number {
-    const { botAt, nextRoundAt, cleanupAt } = this.state.timers;
+    const { botAt, nextRoundAt, cleanupAt, turnEndsAt = null, pausedAt = null } = this.state.timers;
+    const stalls = pausedAt === null ? null : pausedAt + STALL_END_MS / this.speed;
     const decays = Object.values(this.state.devices)
       .filter((device) => device.presence === "away")
       .map((device) => device.since + ASLEEP_AFTER_MS);
@@ -731,7 +1048,7 @@ export class RoomCore<S = CatTowerState> {
     const { screenLeftAt } = this.state;
     const screenGone = screenLeftAt === undefined ? null : screenLeftAt + SCREEN_GRACE_MS / this.speed;
     return Math.min(
-      ...[botAt, nextRoundAt, cleanupAt, link, screenGone, this.retireWarningAt(), ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
+      ...[botAt, nextRoundAt, cleanupAt, turnEndsAt, stalls, link, screenGone, this.nearDue(), this.retireWarningAt(), ...decays, ...Object.values(this.state.live ?? {}).map(deadline)].filter(
         (t): t is number => t !== null,
       ),
     );
@@ -816,7 +1133,8 @@ export class RoomCore<S = CatTowerState> {
     const { state } = this;
     // Toy Tumble has no live table: nobody is ever to move (§5.1).
     if (!this.features.live || state.live?.[deviceId] || this.isTumble()) return;
-    if (!this.midGame()) return;
+    // No live table or Lock Screen for a same-room table (design §5.1).
+    if (!this.midGame() || this.sameRoom()) return;
     const mine = this.controlledSeats(deviceId);
     if (mine.length === 0) return;
     const now = this.now();
@@ -950,9 +1268,12 @@ export class RoomCore<S = CatTowerState> {
     state.seats = playing.map((p) => p.seat);
     state.gameState = gameState;
     state.status = "playing";
-    const out = this.changed();
+    state.seq += 1;
+    this.touch();
     state.turnSeq = state.seq;
+    // Timers first, so the deal's own snapshot carries the first turn's clock.
     this.afterGameChange();
+    const out = this.snapshots();
     // Toy Tumble counts down at once when everyone is here (Start), or once they are (Play again).
     return [...out, ...this.tumbleAdvance()];
   }
@@ -1006,11 +1327,12 @@ export class RoomCore<S = CatTowerState> {
         status: state.status,
         youAreHost: deviceId === state.hostDeviceId,
         seats,
-        ...this.gameFields(controlled),
-        ...(state.options ? { options: { ...state.options } as GameOptions } : {}),
+        ...this.gameFields(controlled, deviceId),
+        ...(state.options ? { options: { ...state.options } as AnyGameOptions } : {}),
         ...(this.features.streaks ? { look: this.look() } : {}),
         ...(state.rematch?.code ? { rematch: state.rematch.code } : {}),
         ...(this.features.tv && this.screenShown() ? { screen: true as const } : {}),
+        ...this.nearField(deviceId),
         ...(this.features.link ? { link: { ping: LINK_PING_MS, acks: [...(state.devices[deviceId]?.acks ?? [])] } } : {}),
         ...this.nudgeField(deviceId),
         ...this.retireField(deviceId),
@@ -1023,13 +1345,87 @@ export class RoomCore<S = CatTowerState> {
    * game's is under the key of its own id, with `gameId` saying which and `game` null, so an app
    * never has to guess what it is decoding.
    */
-  private gameFields(controlled: Seat[]): Pick<RoomView, "game" | "gameId" | "tiles" | "birdwatch" | "tumble"> {
+  private gameFields(controlled: Seat[], deviceId: string): Pick<RoomView, "game" | "gameId" | "tiles" | "birdwatch" | "purrtrait" | "tumble"> {
     const { state } = this;
-    const view = state.gameState === null ? null : this.game.view(state.gameState, controlled);
+    const viewer = { drawerDevice: this.ownsDrawing(deviceId), easyOnly: this.kittens.has(deviceId) };
+    const plain = state.gameState === null ? null : this.game.view(state.gameState, controlled, viewer);
+    // A game with clocks leaves its view's `remainingMs` and `paused` to the room, which keeps the clock.
+    const view = plain !== null && this.game.turnLimitMs ? { ...(plain as object), ...this.clockView() } : plain;
     if (state.game === DEFAULT_GAME) return { game: view as CatTowerView | null };
     // Toy Tumble's clock is real time: the server's own time lets a device with a wrong clock count down right.
     const seen = view !== null && state.game === "tumble" ? { ...(view as object), now: this.now() } : view;
     return { game: null, gameId: state.game as Exclude<GameId, "cat-tower">, ...(seen === null ? {} : { [state.game]: seen }) };
+  }
+
+  /** The turn clock as a view shows it: time left while it runs or is paused, null when the phase has none. */
+  private clockView(): { remainingMs: number | null; paused: boolean } {
+    const { turnEndsAt = null, pausedLeftMs = null } = this.state.timers;
+    if (pausedLeftMs !== null) return { remainingMs: pausedLeftMs, paused: true };
+    return { remainingMs: turnEndsAt === null ? null : Math.max(0, turnEndsAt - this.now()), paused: false };
+  }
+
+  /**
+   * Keeps the turn clock in step with the screen: it stops when the screen is gone past its grace
+   * and carries on, with the same time left, when it is back.
+   */
+  private syncClock(): void {
+    const { timers, screenLeftAt } = this.state;
+    if (this.state.status !== "playing" || !this.game.turnLimitMs) return;
+    const now = this.now();
+    if (this.screenShown()) {
+      timers.pausedAt = null;
+      if ((timers.pausedLeftMs ?? null) === null) return;
+      timers.turnEndsAt = now + (timers.pausedLeftMs as number);
+      timers.pausedLeftMs = null;
+      return;
+    }
+    // The pause began when the grace ran out, however late the alarm that noticed.
+    const at = screenLeftAt === undefined ? now : Math.min(now, screenLeftAt + SCREEN_GRACE_MS / this.speed);
+    // Carried across turns and phases while the screen stays away: the stall counts the whole absence.
+    timers.pausedAt ??= at;
+    const due = timers.turnEndsAt ?? null;
+    // A deadline that passed before the screen went is the turn's to time out.
+    if (due !== null && due > at) {
+      // Never more than the phase's own limit: a turn that began within the grace has run less.
+      timers.pausedLeftMs = Math.min(due - at, (this.game.turnLimitMs(this.state.gameState as S) as number) / this.speed);
+      timers.turnEndsAt = null;
+    }
+  }
+
+  /** Starts the clock for a new turn or phase, or lets the running one be; clears it where there is none. */
+  private startClock(): void {
+    const { timers } = this.state;
+    const limit = this.game.turnLimitMs?.(this.state.gameState as S) ?? null;
+    if (limit === null) {
+      this.stopClock(true);
+      return;
+    }
+    const key = `${this.turnKey()}/${limit}`;
+    if (timers.clockKey !== key) {
+      timers.clockKey = key;
+      const left = limit / this.speed;
+      if (this.screenShown()) {
+        timers.turnEndsAt = this.now() + left;
+        timers.pausedLeftMs = null;
+        timers.pausedAt = null;
+      } else {
+        timers.turnEndsAt = null;
+        timers.pausedLeftMs = left;
+        timers.pausedAt ??= this.now();
+      }
+    }
+    this.syncClock();
+  }
+
+  /** No clock now (a reveal, the end). `keepPause`: the stall keeps counting while the screen stays away. */
+  private stopClock(keepPause: boolean): void {
+    const { timers } = this.state;
+    // Games without clocks keep their timers as they always were.
+    if (timers.clockKey === undefined && timers.turnEndsAt === undefined) return;
+    timers.turnEndsAt = null;
+    timers.pausedLeftMs = null;
+    if (!keepPause) timers.pausedAt = null;
+    timers.clockKey = null;
   }
 
   /** A game event as the room sends it: Cat Tower's as `game`, any other game's under its own id. */
@@ -1083,8 +1479,9 @@ export class RoomCore<S = CatTowerState> {
   private controls(deviceId: string, seat: Seat): boolean {
     // Callers have bounds-checked the seat.
     const s = this.state.seats[seat] as SeatInfo;
-    // A House Cat that took over a seat keeps who sat there, but plays it alone.
-    return s.kind !== "bot" && this.heldBy(deviceId, s);
+    // A House Cat that took over a seat keeps who sat there, but plays it alone. A seat whose
+    // person the host removed is nobody's from then on, on any device (design §10.2).
+    return s.kind !== "bot" && !this.removedSeat(s) && this.heldBy(deviceId, s);
   }
 
   private heldBy(deviceId: string, s: SeatInfo): boolean {
@@ -1107,6 +1504,10 @@ export class RoomCore<S = CatTowerState> {
     // Tumble's boxes (an empty `tumble` batch), which `tumbleInput` answers.
     const asksBoxes = msg.t === "tumble" && msg.ev.length === 0;
     if (this.isScreen(deviceId) && msg.t !== "ping" && msg.t !== "presence" && msg.t !== "link" && !asksBoxes) {
+      return [this.fail(deviceId, "not_allowed")];
+    }
+    // A same-room table has no way in from elsewhere and no bots (design §5.1, ruling 14).
+    if (this.sameRoom() && (SAME_ROOM_REFUSED.has(msg.t) || (msg.t === "configure" && msg.kind === "bot"))) {
       return [this.fail(deviceId, "not_allowed")];
     }
     switch (msg.t) {
@@ -1150,6 +1551,10 @@ export class RoomCore<S = CatTowerState> {
         return this.retire(deviceId, msg.seat);
       case "aim":
         return this.features.tv ? this.aim(deviceId, msg.seat, msg.aim) : [this.fail(deviceId, "bad_message")];
+      case "ink":
+        return this.ink(deviceId, msg);
+      case "remove":
+        return this.remove(deviceId, msg.seat);
       case "tumble":
         return this.isTumble() ? this.tumbleInput(deviceId, socket, msg) : [this.fail(deviceId, "bad_message")];
       default:
@@ -1182,6 +1587,45 @@ export class RoomCore<S = CatTowerState> {
       .map(([id]) => ({ to: id, message }));
   }
 
+  /**
+   * The drawer's strokes (design §6), passed on as they came to the game's audience (Purrtrait:
+   * the screen and the drawer's own device; the Durable Object skips the socket that sent them),
+   * and kept in memory for a screen that joins late. Not state: no seq, no save. Ink from anyone
+   * but the turn's device, for another turn, or over the rate is dropped, as aim is.
+   */
+  private ink(deviceId: string, msg: Extract<ClientMessage, { t: "ink" }>): Outbound[] {
+    const relay = this.inkStream;
+    if (relay === null) return [this.fail(deviceId, "not_allowed")];
+    const rules = this.game.stream as LiveRules<S>;
+    const { seat, turn, ops } = msg;
+    const owner = this.turnDevice();
+    // The key is null unless someone is drawing, so a string never matches it then.
+    if (turn !== relay.key || this.actor() !== seat || !this.controls(deviceId, seat)) return [];
+    if (owner !== null && owner !== deviceId) return [];
+    const restarts = rules.wipes(ops);
+    if (!relay.admit(deviceId, { restarts, last: msg.last === true })) return [];
+    // Null: the room lost the drawing (a rebuild), and only a batch that clears first can stand in for it.
+    const base = relay.base(restarts);
+    if (base === null) return [];
+    const checked = rules.check(ops, base);
+    if (!checked.ok) {
+      if (!checked.full) return [this.fail(deviceId, "bad_message")];
+      if (this.inkFullTold === turn) return [];
+      this.inkFullTold = turn;
+      return [this.fail(deviceId, "easel_full")];
+    }
+    relay.record(ops, checked.tally);
+    const connected = Object.entries(this.state.devices).filter(([, device]) => device.connected).map(([id]) => id);
+    const audience = rules.audience === "all" ? connected : [...connected.filter((id) => this.isScreen(id)), deviceId];
+    const out = relay.fanOut(audience, { t: "ink", seat, turn, ops });
+    if (owner !== null) return out;
+    // A pick the clock made left the turn to whichever device drew first: the seat's other
+    // devices lose the word now, so every device gets its snapshot.
+    this.state.drawerDevice = { turn: this.turnKey(), deviceId };
+    this.state.seq += 1;
+    return [...out, ...this.snapshots()];
+  }
+
   private claim(deviceId: string, seat: Seat, person: Person): Outbound[] {
     const target = this.state.seats[seat];
     if (this.state.status !== "lobby") return [this.fail(deviceId, "not_lobby")];
@@ -1191,6 +1635,8 @@ export class RoomCore<S = CatTowerState> {
     // One box per device in Toy Tumble: it is played with both hands (§5.1).
     if (this.isTumble() && this.controlledSeats(deviceId).length > 0) return [this.fail(deviceId, "not_allowed")];
     const playerId = this.state.devices[deviceId]?.players?.[person.id];
+    // Removed by the host: not from this device, nor as this player from any other.
+    if (this.isRemoved(deviceId) || (playerId !== undefined && this.state.removed?.players.includes(playerId))) return [this.fail(deviceId, "removed")];
     if (this.state.seats.some((s) => s.person?.id === person.id || (playerId && s.playerId === playerId))) {
       return [this.fail(deviceId, "person_seated")];
     }
@@ -1231,7 +1677,8 @@ export class RoomCore<S = CatTowerState> {
    */
   private nudgeTarget(deviceId: string): { seat: Seat; from: Seat } | null {
     const { state } = this;
-    if (!this.midGame()) return null;
+    // Nobody nudges or retires at a same-room table: everyone is in the room (ruling 14).
+    if (!this.midGame() || this.sameRoom()) return null;
     const seat = this.actor();
     if (seat === null || state.seats[seat]?.kind !== "human" || this.controls(deviceId, seat)) return null;
     const from = this.nudger(deviceId);
@@ -1308,7 +1755,7 @@ export class RoomCore<S = CatTowerState> {
    */
   private stalledSeat(): Seat | null {
     const { state } = this;
-    if (!this.midGame()) return null;
+    if (!this.midGame() || this.sameRoom()) return null;
     const seat = this.actor();
     if (seat === null || state.seats[seat]?.kind !== "human") return null;
     const other = Object.keys(state.devices).some((id) => !this.controls(id, seat) && this.nudger(id) !== null);
@@ -1425,7 +1872,7 @@ export class RoomCore<S = CatTowerState> {
   }
 
   /** The host sets the table's options in the lobby (Birdwatch's rule set); the game's parser has checked them. */
-  private setOptions(deviceId: string, options: GameOptions): Outbound[] {
+  private setOptions(deviceId: string, options: AnyGameOptions): Outbound[] {
     const { state } = this;
     if (state.status !== "lobby") return [this.fail(deviceId, "not_lobby")];
     if (deviceId !== state.hostDeviceId) return [this.fail(deviceId, "not_allowed")];
@@ -1467,11 +1914,14 @@ export class RoomCore<S = CatTowerState> {
     const { state } = this;
     if (state.status !== "lobby") return [this.fail(deviceId, "not_lobby")];
     if (this.controlledSeats(deviceId).length === 0) return [this.fail(deviceId, "not_seated")];
-    if (state.seats.some((s) => s.kind === "open")) return [this.fail(deviceId, "seats_open")];
+    // A same-room table's open seats wait for phones that may never scan: the start drops them (ruling 17).
+    if (!this.sameRoom() && state.seats.some((s) => s.kind === "open")) return [this.fail(deviceId, "seats_open")];
     const playing = state.seats.flatMap((s, i) =>
       s.kind === "human" || s.kind === "bot" ? [{ seat: s, from: i }] : [],
     );
     if (playing.length < this.game.minSeats) return [this.fail(deviceId, "not_enough_players")];
+    // The TV is the easel: no game starts without it.
+    if (this.sameRoom() && !this.screenShown()) return [this.fail(deviceId, "no_screen")];
     // A real-time game starts with everyone there (§5.1).
     if (this.isTumble() && state.seats.some((s, i) => s.kind === "human" && !this.seatConnected(i))) {
       return [this.fail(deviceId, "not_connected")];
@@ -1506,19 +1956,54 @@ export class RoomCore<S = CatTowerState> {
     }
     // The game was turned off since this table was dealt: it plays on to the end, and no new one is dealt.
     if (state.game !== DEFAULT_GAME && !this.features.games?.includes(state.game)) return [this.fail(deviceId, "game_off")];
+    // The first seat rotates: everyone moves one on. A seat a House Cat took over is a plain one now.
+    const seats = [...state.seats.slice(1), ...state.seats.slice(0, 1)]
+      // A seat its host removed stays out of the new table (design §10.2).
+      .filter((s) => !this.removedSeat(s))
+      .map((s): SeatInfo => (s.left ? { kind: "bot", botLevel: "house" } : { ...s }));
+    if (seats.length < this.game.minSeats) return [this.fail(deviceId, "not_enough_players")];
     state.rematch = { code: null };
     this.rematchIntent = {
       name: state.name,
       look: this.look(),
-      // The first seat rotates: everyone moves one on. A seat a House Cat took over is a plain one now.
-      seats: [...state.seats.slice(1), ...state.seats.slice(0, 1)].map((s): SeatInfo => (s.left ? { kind: "bot", botLevel: "house" } : { ...s })),
-      hostDeviceId: deviceId,
+      seats,
+      hostDeviceId: this.rematchHost(deviceId),
       ...(state.screens?.length ? { screens: [...state.screens] } : {}),
+      ...this.rematchMembers(),
+      ...(state.removed ? { removed: { devices: [...state.removed.devices], players: [...state.removed.players] } } : {}),
       ...(state.options ? { options: { ...state.options } } : {}),
       // The same game again. Cat Tower's intent is as it always was.
       ...(state.game === DEFAULT_GAME ? {} : { game: state.game }),
     };
     return [];
+  }
+
+  /**
+   * Who hosts the table Play again deals. Elsewhere it's whoever tapped it. At a same-room table the
+   * host can remove a player, so a tap never hands that on: the host stays while a seat they hold is
+   * dealt again; otherwise ruling 11's handoff picks the next person's seat in seat order after the
+   * host's (or from the first seat), whose own device holds it. With no such seat, the one who tapped.
+   */
+  private rematchHost(deviceId: string): string {
+    const { state } = this;
+    if (!this.sameRoom()) return deviceId;
+    const host = state.hostDeviceId;
+    // `controls` leaves out removed seats and House Cats, which Play again doesn't deal as people.
+    if (state.seats.some((s, i) => s.kind === "human" && this.controls(host, i))) return host;
+    const n = state.seats.length;
+    // After the seat the host's device claimed; with none, from the first seat.
+    const first = state.seats.findIndex((s) => s.deviceId === host) + 1;
+    const held = state.seats.flatMap((s, i) => (s.kind === "human" && this.controls(s.deviceId as string, i) ? [i] : []));
+    const next = held.map((i) => ({ i, d: (i - first + n) % n })).sort((x, y) => x.d - y.d)[0];
+    return next === undefined ? deviceId : ((state.seats[next.i] as SeatInfo).deviceId as string);
+  }
+
+  /** A same-room table's members, for the table Play again deals: every device here but its screens. */
+  private rematchMembers(): Pick<RematchIntent, "members"> {
+    if (!this.sameRoom()) return {};
+    // Every seat's device has been here, so it is among them; so is the device asking.
+    const ids = new Set([...Object.keys(this.state.devices), ...(this.state.members ?? [])]);
+    return { members: [...ids].filter((id) => !this.isScreen(id) && !this.turnedAway(id)) };
   }
 
   /** Four uint32 words from the room's rng, which is crypto-backed in production. */
@@ -1534,7 +2019,75 @@ export class RoomCore<S = CatTowerState> {
     if (!this.controls(deviceId, seat)) return [this.fail(deviceId, "not_your_seat")];
     this.state.seats[seat] = { kind: "open" };
     this.dropMoveCodes((entry) => entry.seat === seat);
+    this.handHost(seat);
     return this.changed();
+  }
+
+  /**
+   * The host removes a person at a same-room table (design §10.2, ruling 10): a joiner who
+   * shouldn't be there. In the lobby the seat opens; in a game it leaves for good (the game's
+   * forfeit: a drawer mid-turn misses with "left"), and once over it only stays out of Play again.
+   * The seat's player, and each device of the seat's that holds no other seat still in, go on
+   * `removed` and are refused from then on. The host's own seats are not theirs to remove.
+   */
+  private remove(deviceId: string, seat: Seat): Outbound[] {
+    const { state } = this;
+    if (!this.sameRoom() || deviceId !== state.hostDeviceId) return [this.fail(deviceId, "not_allowed")];
+    const target = state.seats[seat];
+    if (!target || target.kind !== "human" || this.controls(deviceId, seat)) return [this.fail(deviceId, "bad_seat")];
+    // The devices that hold the seat now, and the one that claimed it, even while it isn't here,
+    // unless they keep another seat (`turnedAway`'s rule).
+    const holders = new Set([...Object.keys(state.devices).filter((id) => this.controls(id, seat)), target.deviceId].filter((id) => id !== undefined));
+    const devices = [...holders].filter((id) => id !== state.hostDeviceId && !this.keepsSeat(id, state.devices[id]?.players ?? {}, seat));
+    const prior = state.removed ?? { devices: [], players: [] };
+    state.removed = {
+      devices: [...new Set([...prior.devices, ...devices])],
+      players: [...new Set([...prior.players, ...(target.playerId === undefined ? [] : [target.playerId])])],
+    };
+    // Gone at once: it hears nothing more, and the Durable Object closes its sockets.
+    const out: Outbound[] = [];
+    for (const id of devices) {
+      out.push(...this.disconnect(id));
+      delete state.devices[id];
+    }
+    // A same-room table has no move codes to drop: it refuses `moveSeat`.
+    if (state.status === "lobby") {
+      state.seats[seat] = { kind: "open" };
+      this.handHost(seat);
+      return [...out, ...this.changed()];
+    }
+    if (state.status === "playing" && this.outSeats()[seat] !== true) {
+      // The seat is still in the game, so its forfeit is never refused.
+      const applied = this.leaveGame(seat) as { out: Outbound[] };
+      this.handHost(seat);
+      this.touch();
+      this.afterGameChange();
+      return [...out, ...applied.out, ...this.snapshots()];
+    }
+    return [...out, ...this.changed()];
+  }
+
+  /** The seats still in: a person's, in the lobby or not out of the game, and not removed by the host. */
+  private inSeats(): Seat[] {
+    const out = this.outSeats();
+    return this.state.seats.flatMap((s, i) => (s.kind === "human" && out[i] !== true && !this.removedSeat(s) ? [i] : []));
+  }
+
+  /**
+   * At a same-room table the host is whoever can remove a player (ruling 11): when the host holds
+   * no seat still in once `from` has gone, the role passes to the device of the next seat in seat
+   * order after it that is still in. With nobody seated there is no host, and the next phone to
+   * sit is it, as at a table a TV made.
+   */
+  private handHost(from: Seat): void {
+    const { state } = this;
+    if (!this.sameRoom() || state.hostDeviceId === "") return;
+    const inSeat = this.inSeats();
+    if (inSeat.some((i) => this.controls(state.hostDeviceId, i))) return;
+    const n = state.seats.length;
+    const next = inSeat.map((i) => ({ i, d: (i - from + n) % n })).sort((x, y) => x.d - y.d)[0];
+    // A person's seat always has the device that claimed it, or that it was moved to.
+    state.hostDeviceId = next === undefined ? "" : ((state.seats[next.i] as SeatInfo).deviceId as string);
   }
 
   private moveSeat(deviceId: string, seat: Seat): Outbound[] {
@@ -1592,6 +2145,8 @@ export class RoomCore<S = CatTowerState> {
   }
 
   private act(deviceId: string, seat: Seat, action: GameAction, id?: string): Outbound[] {
+    // The room's own actions (a clock running out) are never a client's.
+    if (this.game.isRoomOnly?.(action)) return [this.fail(deviceId, "not_allowed")];
     const device = this.state.devices[deviceId];
     // Sent again after a reconnect, already applied: the snapshot says so.
     if (id !== undefined && device?.acks?.includes(id)) return [{ to: deviceId, message: this.snapshotFor(deviceId) }];
@@ -1600,8 +2155,16 @@ export class RoomCore<S = CatTowerState> {
     const turn = this.turnKey();
     // Who is connected is the room's to know, so Toy Tumble's Play without is the room's to do.
     if (this.isTumble() && JSON.stringify(action) === PLAY_WITHOUT) return this.playWithout(deviceId);
-    const applied = this.isForfeit(action) ? this.leaveGame(seat) : this.applyGame(seat, action);
+    // In a game with ink, the drawing turn belongs to one device (design §10.2): another device of
+    // the drawer's may still leave the game for the seat, but not act for it.
+    const owner = this.turnDevice();
+    const forfeit = this.isForfeit(action);
+    const forActor = seat === this.actor() && !forfeit;
+    if (owner !== null && owner !== deviceId && forActor) return [this.fail(deviceId, "not_allowed")];
+    const applied = forfeit ? this.leaveGame(seat) : this.applyGame(seat, action, { easyOnly: this.kittens.has(deviceId) });
     if ("error" in applied) return [this.fail(deviceId, applied.error)];
+    if (forfeit) this.handHost(seat);
+    if (forActor && owner === null && this.game.stream) this.state.drawerDevice = { turn, deviceId };
     if (id !== undefined && device) device.acks = [...(device.acks ?? []), id].slice(-ACKS_KEPT);
     const mover = this.state.seats[seat]?.playerId;
     const ended = this.game.endsTurn(action, applied.events, seat);
@@ -1688,18 +2251,36 @@ export class RoomCore<S = CatTowerState> {
    * (`snapshots()`), which carries the truth (drawn cards, a fresh deal, the
    * new discard top, a finished room).
    */
-  private applyGame(seat: Seat, action: unknown): { out: Outbound[]; events: AnyGameEvent[] } | { error: GameError } {
+  private applyGame(
+    seat: Seat,
+    action: unknown,
+    /** What the room knows of the acting device; left out for the room's own actions. */
+    ctx?: { easyOnly: boolean },
+  ): { out: Outbound[]; events: AnyGameEvent[] } | { error: GameError } {
     const { state } = this;
-    const result = this.game.apply(state.gameState as S, seat, action);
+    const result = this.game.apply(state.gameState as S, seat, action, ctx);
     if (!result.ok) return { error: result.error };
-    state.gameState = result.state;
-    // A game that tells its changes by snapshot alone (Toy Tumble) still moves the seq.
-    if (result.events.length === 0 && this.isTumble()) state.seq += 1;
-    const out = result.events.flatMap((event) => {
+    return { out: this.commit(result.state, result.events as AnyGameEvent[]), events: result.events as AnyGameEvent[] };
+  }
+
+  /** Stores a new game state and sends its events, each device its own filtered copy. */
+  private commit(next: S, events: readonly AnyGameEvent[]): Outbound[] {
+    const { state } = this;
+    state.gameState = next;
+    // A change the game tells nobody of (a guesser leaving Purrtrait), or a game that tells its
+    // changes by snapshot alone (Toy Tumble): the snapshots that follow still carry a new seq, so
+    // no device takes them for one it has already seen.
+    if (events.length === 0) state.seq += 1;
+    return events.flatMap((event) => {
       if (this.game.startsTurn(event)) state.turnSeq = state.seq + 1;
       return this.broadcast((deviceId) => this.gameEvent(this.game.filterEvent(event, this.controlledSeats(deviceId))));
     });
-    return { out, events: result.events as AnyGameEvent[] };
+  }
+
+  /** After a change the room made itself: timers follow, and every device gets its snapshot. */
+  private afterAndSnapshots(): Outbound[] {
+    this.afterGameChange();
+    return this.snapshots();
   }
 
   /**
@@ -1739,6 +2320,7 @@ export class RoomCore<S = CatTowerState> {
     const { timers } = state;
     const phase = this.game.phase(state.gameState as S);
     const now = this.now();
+    this.followInk();
     this.queueStreak(phase === "over");
     const from = this.movedBy;
     this.movedBy = null;
@@ -1750,6 +2332,7 @@ export class RoomCore<S = CatTowerState> {
       timers.cleanupAt = state.lastActivity + CLEANUP_AFTER_MS;
       timers.botAt = null;
       timers.nextRoundAt = null;
+      this.stopClock(false);
       return;
     }
     // Toy Tumble runs its own rounds (the hooks below): no bot clock, no turn, no "your move".
@@ -1760,10 +2343,12 @@ export class RoomCore<S = CatTowerState> {
     if (phase === "between") {
       timers.nextRoundAt = now + NEXT_ROUND_DELAY_MS / this.speed;
       timers.botAt = null;
+      this.stopClock(true);
       return;
     }
 
     timers.nextRoundAt = null;
+    this.startClock();
     const turn = this.turnKey();
     if (state.turnAt?.turn !== turn) state.turnAt = { turn, at: now };
     const actor = this.actor() as Seat;
@@ -1775,7 +2360,8 @@ export class RoomCore<S = CatTowerState> {
     timers.botAt = null;
 
     const key = this.turnKey();
-    if (this.seatPresence(actor) !== "awake" && state.pushedForTurn !== key) {
+    // Everyone at a same-room table is in the room: no "your move" (design §5.1).
+    if (!this.sameRoom() && this.seatPresence(actor) !== "awake" && state.pushedForTurn !== key) {
       state.pushedForTurn = key;
       this.pushIntents.push({
         deviceId: seat.deviceId as string,

@@ -143,6 +143,8 @@ export async function worker(
     reportsKey?: string;
     /** `TV`: Pounce on the TV (screens). Off unless asked for. */
     tv?: boolean;
+    /** `PURRTRAIT_APPLINKS`: the site association lists Purrtrait's `/e/*`. Off unless asked for. */
+    purrtraitAppLinks?: boolean;
     /** `GAMES`: the games beyond Cat Tower that rooms may be created for (e.g. "tiles"). Off unless given. */
     games?: string;
     /** `APP_MINIMUM`, `APP_MINIMUM_FORCE`, `APP_LATEST` and `APP_STORE_URL` (app updates). Unset unless given. */
@@ -206,6 +208,7 @@ export async function worker(
       ...(options.reportsKey ? { REPORTS_KEY: options.reportsKey } : {}),
       ...(options.games ? { GAMES: options.games } : {}),
       ...(options.tv ? { TV: "on" } : {}),
+      ...(options.purrtraitAppLinks ? { PURRTRAIT_APPLINKS: "on" } : {}),
       ...(options.daily ? { DAILY: "on" } : {}),
       ...(options.daily !== undefined && options.dailyTest ? { DAILY_TEST: "on" } : {}),
       ...(options.appMinimum === undefined ? {} : { APP_MINIMUM: options.appMinimum }),
@@ -382,8 +385,9 @@ export class Client {
   }
 }
 
-export async function connect(mf: Miniflare, code: string, device: Device, headers: Record<string, string> = {}): Promise<Client> {
-  const res = await mf.dispatchFetch(`${BASE}/v1/rooms/${code}/ws`, {
+/** `query`: the socket URL's, e.g. a Purrtrait table's `?near=<key>`. */
+export async function connect(mf: Miniflare, code: string, device: Device, headers: Record<string, string> = {}, query = ""): Promise<Client> {
+  const res = await mf.dispatchFetch(`${BASE}/v1/rooms/${code}/ws${query}`, {
     headers: { authorization: `Bearer ${device.token}`, upgrade: "websocket", ...headers },
   });
   expect(res.status).toBe(101);

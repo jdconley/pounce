@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 
 import { describe, expect, test } from "vitest";
 
-import { tvAppLinksOn } from "../env";
+import { purrtraitAppLinksOn, tvAppLinksOn } from "../env";
 
-import { appSiteAssociation, appStoreId, BIRDWATCH_SINCE, dailyPage, deadLinkPage, DISH_SINCE, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, sharePage, viewerOf } from "./links";
+import { appSiteAssociation, appStoreId, BIRDWATCH_SINCE, dailyPage, deadLinkPage, DISH_SINCE, INVITE_CSP, INVITE_SCRIPT, INVITE_SCRIPT_HASH, ogImage, pouncePage, scanPage, sharePage, viewerOf } from "./links";
 import { MEDIA } from "./site-media";
 
 import type { InvitePeek } from "../safety/safety";
@@ -225,6 +225,44 @@ describe("with TV links (docs/tv-protocol.md)", () => {
     expect(await appSiteAssociation(true, true).json()).toEqual({
       applinks: { details: [{ ...app, components: [{ "/": "/j/*" }, { "/": "/p/*" }, { "/": "/tv/*" }] }] },
     });
+  });
+});
+
+describe("Purrtrait: same room only (design §5)", () => {
+  const PURR: InvitePeek = { table: "Living Room", game: "purrtrait", host: { name: "Mia", cat: 1 } };
+
+  test("the association lists /e/* last, and only when asked", async () => {
+    const app = { appIDs: ["B222J9J7B8.com.conleychaos.play"] };
+    expect(purrtraitAppLinksOn({ PURRTRAIT_APPLINKS: "off" })).toBe(false);
+    expect(purrtraitAppLinksOn({})).toBe(false);
+    expect(purrtraitAppLinksOn({ PURRTRAIT_APPLINKS: "on" })).toBe(true);
+    expect(await appSiteAssociation(true, true, false).json()).toEqual({
+      applinks: { details: [{ ...app, components: [{ "/": "/j/*" }, { "/": "/p/*" }, { "/": "/tv/*" }] }] },
+    });
+    expect(await appSiteAssociation(true, true, true).json()).toEqual({
+      applinks: { details: [{ ...app, components: [{ "/": "/j/*" }, { "/": "/p/*" }, { "/": "/tv/*" }, { "/": "/e/*" }] }] },
+    });
+  });
+
+  test("/j/ for a Purrtrait table says to scan the TV: no button, no code, no name, no script", async () => {
+    for (const install of [TF, { appStoreUrl: APP_STORE, storeVersion: "9.9" }, NONE]) {
+      const res = sharePage("BCDFG", { ...install, viewer: "other" }, ORIGIN, PURR);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      const html = await res.text();
+      expect(html).toContain("<h1>Scan the code on the TV.</h1>");
+      expect(html).toContain('<p class="game purrtrait">Purrtrait</p>');
+      expect(html.match(/<a [^>]*>/g)).toBeNull();
+      expect(html).not.toContain("BCDFG");
+      expect(html).not.toContain("Mia");
+      expect(html).not.toContain("Living Room");
+      expect(html).not.toContain("<script");
+      expect(html).not.toContain("apple-itunes-app");
+    }
+  });
+
+  test("the scan page, as /e/ shows it without a live key, is the same", async () => {
+    expect(await scanPage().text()).toBe(await sharePage("BCDFG", TF, ORIGIN, PURR).text());
   });
 });
 

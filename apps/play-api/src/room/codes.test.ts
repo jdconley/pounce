@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { seedOf } from "../../tests/seeds";
 import { createRng } from "../rules/rng";
 
-import { newMoveCode, newRoomCode, ROOM_CODE_ALPHABET } from "./codes";
+import { NEAR, newMoveCode, newNearKey, newRoomCode, parseNear, ROOM_CODE_ALPHABET, typedNear } from "./codes";
 
 describe("room codes", () => {
   it("alphabet has no vowels or look-alikes", () => {
@@ -33,5 +33,25 @@ describe("room codes", () => {
     expect(newRoomCode(createRng(seedOf(7)))).toBe(newRoomCode(createRng(seedOf(7))));
     expect(newRoomCode(() => 0)).toBe("BBBBB");
     expect(newRoomCode(() => 0.999999)).toBe("99999");
+  });
+});
+
+describe("near keys (Purrtrait, design §5.2)", () => {
+  it("are 8 chars from the alphabet, and a typed code is the room code plus the key's first 3", () => {
+    const rng = createRng(seedOf(3));
+    for (let i = 0; i < 200; i++) {
+      const key = newNearKey(rng);
+      expect(key).toMatch(NEAR);
+      expect(typedNear("BCDFG", key)).toBe(`BCDFG${key.slice(0, 3)}`);
+      expect(typedNear("BCDFG", key)).toMatch(NEAR);
+    }
+    expect("bcdfghjk").not.toMatch(NEAR);
+    expect("BCDFGHJ").not.toMatch(NEAR);
+    expect("BCDFGHJKL").not.toMatch(NEAR);
+    expect("BCDFGHJA").not.toMatch(NEAR);
+    expect(parseNear("bcdfghjk")).toBe("BCDFGHJK");
+    expect(parseNear("BCDFGHJA")).toBeNull();
+    expect(parseNear(null)).toBeNull();
+    expect(parseNear(undefined)).toBeNull();
   });
 });

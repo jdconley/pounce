@@ -1,16 +1,16 @@
 import { servedAt, storeKnown } from "./app/live";
-import { appStatus, refusalFor, RETIRED_SNAPSHOT, UPDATE_HEADER, UPDATE_REQUIRED, type UpdateRequired } from "./app/status";
+import { appStatus, refusalFor, refused, RETIRED_SNAPSHOT, UPDATE_HEADER, UPDATE_REQUIRED, type UpdateRequired } from "./app/status";
 import { APP_HEADER, parseApp } from "./app/version";
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { APPLE_ROOTS } from "./consent/appstore";
 import { noticePage } from "./consent/pages";
 import { DISH_APP, dishListed } from "./daily/games";
 import { dailyRoute, who as dailyPlayer } from "./daily/routes";
-import { dailyOn, devSpeed, tvAppLinksOn, tvOn } from "./env";
+import { dailyOn, devSpeed, purrtraitAppLinksOn, tvAppLinksOn, tvOn } from "./env";
 import { active, forget, minted, pageView, parseReport, prune, reached, report } from "./funnel/funnel";
-import { DEFAULT_GAME, GAMES_HEADER, gamesFor, gamesOn, gameTitle, isGameId, type GameId } from "./games";
+import { DEFAULT_GAME, GAMES_HEADER, gamesFor, gamesOn, gameTitle, isGameId, sameRoomGame, type GameId } from "./games";
 import { asAppSocket, browserAnswer, isBrowserSocket } from "./http/browser-socket";
-import { appSiteAssociation, dailyPage, ogImage, pouncePage, sharePage, viewerOf } from "./http/links";
+import { appSiteAssociation, dailyPage, ogImage, pouncePage, scanPage, sharePage, viewerOf } from "./http/links";
 import { mediaFile } from "./http/media";
 import { privacyPage } from "./http/privacy";
 import { getRedirect, homePage, llmsTxt, robotsTxt, sitemapXml, supportPage } from "./http/site";
@@ -50,11 +50,11 @@ import { parseProfile, parseStatePatch } from "./players/parse";
 import { answerPounce, createPounce, linkPounce } from "./pounce/pounces";
 import { MIN_PROTOCOL } from "./protocol";
 import { parseSubscription, webPushOn } from "./push/webpush";
-import { newRoomCode, ROOM_CODE } from "./room/codes";
+import { newRoomCode, parseNear, ROOM_CODE } from "./room/codes";
 import { DEVICE_HEADER, PLAYER_HEADER, ROLE_HEADER } from "./room/game-room";
 import { parseRoomName } from "./room/names";
 import { lockedFor, withoutUndrawable } from "./room/tables";
-import { blockPlayer, guardJoin, guardScreenCode, listBlocks, mayMakeScreenLink, mayMint, mayReportFunnel, nameCheck, ownerReports, peekInvite, reportPlayer, unblockPlayer } from "./safety/safety";
+import { blockPlayer, guardJoin, guardScreenCode, listBlocks, mayMakeScreenLink, mayMint, mayReportFunnel, nameCheck, ownerReports, peekInvite, peekNear, reportPlayer, unblockPlayer } from "./safety/safety";
 import { LINK_TOKEN, newLinkCode, newLinkToken, parseBoardLinkBody, parseLinkBody, parseScreenBody, SCREEN_LINK_TTL_MS } from "./screens/screens";
 import { creatorLook, isMine, leavePair, myLeft, myOwn, myStreaks, myTrophies, PAIR_ID, pairStub, rejoinPair, syncPairPeople } from "./streaks/pairs";
 import { consentOn, liveOn, notifyOn, streaksOn, trophyOn } from "./streaks/profile";
@@ -85,6 +85,8 @@ const ROOM_WS = /^\/v1\/rooms\/([^/]+)\/ws$/;
 const SCREEN_WS = /^\/v1\/screens\/([^/]+)\/ws$/;
 /** `/tv/{token}`: a link's QR, opened by a phone's camera. */
 const TV_PATH = /^\/tv\/([^/]+)$/;
+/** A Purrtrait TV's QR: `/e/<room code>?near=<key>` ("e" for easel). */
+const EASEL_PATH = /^\/e\/([^/]+)$/;
 /** `/v1/rooms/{code}/reports` or `/blocks`: report or block someone at that table. */
 const ROOM_SAFETY = /^\/v1\/rooms\/([^/]+)\/(reports|blocks)$/;
 const MY_BLOCK = /^\/v1\/me\/blocks\/([^/]+)$/;
@@ -175,6 +177,9 @@ async function mintDevice(request: Request, env: Env, secret: string, later: Lat
 const appGames = (request: Request, env: Env): GameId[] =>
   gamesFor(request.headers.get(GAMES_HEADER), request.headers.get(APP_HEADER), devSpeed(env) > 1);
 
+/** Purrtrait's TV links (`/e/`) exist while its tables can be dealt: a TV makes them, so `TV` is on too. */
+const easelOn = (env: Env): boolean => tvOn(env) && gamesOn(env).some(sameRoomGame);
+
 /**
  * The same, less Cat Tower: what the device's index is told when the app opens a socket or
  * fetches its tables (`DeviceIndex.players`). It rides on the call those requests always made,
@@ -244,6 +249,8 @@ async function createRoom(request: Request, env: Env, deviceId: string, later: L
   // A TV makes a table with no host: the caller is its screen, and the first phone to sit hosts it.
   const screen = "screen" in body;
   if (screen && (body.screen !== true || !tvOn(env) || "name" in body)) return badRequest();
+  // A same-room game's table (Purrtrait) is made only by its TV (design §5.1).
+  if (!screen && sameRoomGame(game)) return badRequest();
   // Optional: without one the room gets its default name.
   const name = "name" in body ? parseRoomName(body.name) : undefined;
   if (name === null) return badRequest();
@@ -274,17 +281,22 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
   if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
     return json(426, { error: "upgrade_required" });
   }
+  const query = new URL(request.url).searchParams;
+  // A screen (a TV) is only a role while `TV` is on; off, there is no such thing to ask for.
+  const screen = query.get("role") === "screen";
+  // A same-room table's near key, off the TV's QR or typed from it: only a key's shape reaches the room.
+  const near = parseNear(query.get("near"));
   // Joining by code (`guardJoin`): wrong guesses are counted, and too many lock the guesser out.
-  const guard = await guardJoin(env, code, deviceId, clientIp(request), Date.now());
+  const guard = await guardJoin(env, code, deviceId, clientIp(request), Date.now(), { near, screen: screen && tvOn(env), games: appGames(request, env) });
   if ("retryAfter" in guard) {
     const response = json(429, { error: "too_many_attempts", retryAfter: guard.retryAfter });
     response.headers.set("retry-after", String(guard.retryAfter));
     return response;
   }
   if (!guard.exists) return notFound();
-  // A screen (a TV) is only a role while `TV` is on; off, there is no such thing to ask for.
-  const screen = new URL(request.url).searchParams.get("role") === "screen";
   if (screen && !tvOn(env)) return notFound();
+  // In a header too: an app can't read a refused upgrade's body.
+  if (guard.notNear) return refused(403, "not_near");
   // A TV is no player: it is never counted as an active device.
   if (!screen) later(active(env, deviceId, Date.now()).catch(() => undefined));
   // The room trusts these headers, so client-supplied ones must never reach it.
@@ -342,7 +354,10 @@ async function linkScreen(request: Request, env: Env, deviceId: string): Promise
   const now = Date.now();
   // Only the host or someone seated, and a table that doesn't exist says the same, so the
   // route tells nobody which tables exist.
-  if ((await env.ROOMS.get(env.ROOMS.idFromName(body.room)).mayLink(deviceId)) !== "ok") return json(403, { error: "not_seated" });
+  const may = await env.ROOMS.get(env.ROOMS.idFromName(body.room)).mayLink(deviceId);
+  // At a same-room table only the host may put it on another TV (Purrtrait, design §5.1).
+  if (may === "not_allowed") return json(403, { error: "not_allowed" });
+  if (may !== "ok") return json(403, { error: "not_seated" });
   let token: string | null;
   if ("code" in body) {
     // Six characters can be guessed: wrong codes back off like room codes. A 128-bit token can't.
@@ -776,11 +791,11 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
   const streaks = streaksOn(env);
   const notify = notifyOn(env);
   if (method === "GET" && pathname === "/.well-known/apple-app-site-association") {
-    return appSiteAssociation(notify, tvAppLinksOn(env));
+    return appSiteAssociation(notify, tvAppLinksOn(env), easelOn(env) && purrtraitAppLinksOn(env));
   }
   if (method === "GET" && pathname === "/og/room.jpg") return ogImage();
   if ((method === "GET" || method === "HEAD") && isWebPlayerPath(pathname)) return (await webPlayer(request, env.ASSETS)) ?? notFound();
-  if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env), dailyOn(env));
+  if (method === "GET" && pathname === "/privacy") return privacyPage(consentOn(env), dailyOn(env), easelOn(env));
   // Birdwatch on the site follows GAMES: the pages name it only while its tables can be dealt.
   const birdwatch = () => gamesOn(env).includes("birdwatch");
   if (method === "GET" && pathname === "/support") return supportPage(dailyOn(env), birdwatch());
@@ -800,6 +815,17 @@ async function handle(request: Request, env: Env, ctx?: ExecutionContext): Promi
     const token = tvLink[1] as string;
     if (!LINK_TOKEN.test(token)) return notFound();
     return new Response(null, { status: 302, headers: { location: `${new URL(request.url).origin}/play/tv-link/${token}`, "cache-control": "no-store" } });
+  }
+  // A Purrtrait TV's QR on a phone without the app (or before the app draws Purrtrait): a live
+  // near key goes on to the web player's page for it, keeping the key; anything else is told to
+  // scan the TV. Only while Purrtrait tables can be dealt.
+  const easel = method === "GET" && easelOn(env) ? EASEL_PATH.exec(pathname) : null;
+  if (easel) {
+    const code = easel[1] as string;
+    if (!ROOM_CODE.test(code)) return notFound();
+    const near = parseNear(new URL(request.url).searchParams.get("near"));
+    if (near === null || !(await peekNear(env, code, near, clientIp(request), Date.now()))) return scanPage();
+    return new Response(null, { status: 302, headers: { location: `${new URL(request.url).origin}/play/e/${code}?near=${near}`, "cache-control": "no-store" } });
   }
   // Where a Daily Dish share link lands: only while DAILY is on, else a 404 as before.
   if (method === "GET" && pathname === "/daily" && dailyOn(env)) {

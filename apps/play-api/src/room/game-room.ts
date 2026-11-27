@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 
 import { servedAt, storeKnown } from "../app/live";
-import { gameUnsupported } from "../app/status";
+import { gameUnsupported, refused } from "../app/status";
 import { APP_HEADER, parseApp } from "../app/version";
 import { devSpeed, linkOn, nudgeOn, tvOn } from "../env";
 import { reached } from "../funnel/funnel";
@@ -21,7 +21,7 @@ import { FALLBACK_ZONE } from "../streaks/clock";
 import { myStreaks, rememberLook, reportTable, unlocksFor, type PairViews } from "../streaks/pairs";
 import { liveOn, notifyOn, streaksOn, trophyOn } from "../streaks/profile";
 
-import { newRoomCode } from "./codes";
+import { newRoomCode, parseNear } from "./codes";
 import {
   RoomCore,
   type AdoptRule,
@@ -56,6 +56,8 @@ const MAX_HEADER_PLAYERS = 16;
 
 const BAD_MESSAGE: ServerMessage = { t: "error", code: "bad_message" };
 const NORMAL_CLOSURE = 1000;
+/** A screen a same-room table swapped out, or a device its host removed: refused, as a 403 upgrade is (4000 + 403). */
+const REFUSED_CLOSURE = 4403;
 /** The app closed the socket itself (leaving the table, going to the background). */
 const ASKED_CLOSURES = [NORMAL_CLOSURE, 1001];
 /** The heartbeat the room answers without waking (the bad connection indicator). */
@@ -67,9 +69,6 @@ const STREAK_ATTEMPTS = 2;
 const TUMBLE_TICK_MS = 100;
 
 const cryptoRng = (): number => (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 2 ** 32;
-
-/** A refused upgrade: the status and `{ "error" }`, which a browser hears as close code 4000 + status. */
-const refuse = (status: number, error: string): Response => new Response(JSON.stringify({ error }), { status, headers: { "content-type": "application/json" } });
 
 /**
  * One instance per room code. Holds the room's state in SQLite, the devices'
@@ -103,9 +102,18 @@ export class GameRoom extends DurableObject<Env> {
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
     void ctx.blockConcurrencyWhile(async () => {
       this.core = this.load();
-      if (this.core) await this.dropStaleDevices(this.core);
+      if (!this.core) return;
+      // Kittens stay kittens across a wake: their sockets remember (a device's age band is never stored here).
+      for (const ws of ctx.getWebSockets()) {
+        const { deviceId, kitten } = attachment(ws);
+        if (kitten) this.core.setKitten(deviceId, true);
+      }
+      await this.dropStaleDevices(this.core);
+      if (!this.core) return;
+      // A drawing turn's ink lived only in the old instance: ask the drawer for it again.
+      this.deliver(this.core.rebuilt());
       // A Toy Tumble round lived in the memory this instance lost: it counts down again (§6.6).
-      const replayed = this.core?.restartRound() ?? [];
+      const replayed = this.core.restartRound();
       if (replayed.length > 0) await this.after(replayed);
     });
   }
@@ -213,18 +221,38 @@ export class GameRoom extends DurableObject<Env> {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return new Response(null, { status: 426 });
     }
+    // A device the host of a same-room table removed stays out, whatever key it brings, and so
+    // does a removed player on another device (design §10.2).
+    const players = parsePlayers(request.headers.get(PLAYER_HEADER));
+    if (this.core.turnedAway(deviceId, players)) return refused(403, "removed");
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
     // A device that sits or hosts is no screen, and only a device the room lists is one: it made
     // the table, a phone linked it, or it followed Play again. Asked before the socket exists, so
     // each refusal is a plain status.
     const screen = tvOn(this.env) && request.headers.get(ROLE_HEADER) === "screen";
-    if (screen && !this.core.mayScreen(deviceId)) return refuse(409, "seated");
-    if (screen && !this.core.isScreen(deviceId)) return refuse(403, "not_screen");
+    if (screen && !this.core.mayScreen(deviceId)) return refused(409, "seated");
+    if (screen && !this.core.isScreen(deviceId)) return refused(403, "not_screen");
+    // A same-room table (Purrtrait) lets a stranger in only with the TV's near key. The Worker's
+    // guard asked the same and counted a wrong one; asked again here, where the socket is made.
+    if (!screen && this.core.knows(deviceId, nearParam(request), false) === "not_near") return refused(403, "not_near");
+    // A game that changes for kittens (Purrtrait's two Easy words) needs the device's age band
+    // first. A lookup that fails keeps what the room already knew: a kitten stays one.
+    const kitten =
+      !screen && this.core.wantsAgeBands()
+        ? await this.index(deviceId)
+            .ageBand()
+            .then((band) => band === "kitten")
+            .catch(() => null)
+        : false;
+    if (!this.core) return new Response(null, { status: 404 });
+    // The host may have removed it while the age band was looked up.
+    if (this.core.turnedAway(deviceId, players)) return refused(403, "removed");
+    if (kitten !== null) this.core.setKitten(deviceId, kitten);
     this.ctx.acceptWebSocket(server, [deviceId]);
     // `socket`: which of the device's sockets this is (a second tab, a reconnect), for Toy Tumble's one writer per box.
-    server.serializeAttachment({ deviceId, socket: crypto.randomUUID() });
-    await this.after(this.core.connect(deviceId, parsePlayers(request.headers.get(PLAYER_HEADER))));
+    server.serializeAttachment({ deviceId, socket: crypto.randomUUID(), ...(this.core.isKitten(deviceId) ? { kitten: true } : {}) });
+    await this.after(this.core.connect(deviceId, players));
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -245,6 +273,15 @@ export class GameRoom extends DurableObject<Env> {
       this.deliver(core.handle(deviceOf(ws), parsed, undefined, socketOf(ws)));
       return;
     }
+    // A drawer's ink: the same, back to every socket of the drawer's device but this one. Saved only
+    // when it made its device the drawing turn's (a pick the clock made): never the ink itself.
+    if (parsed.t === "ink") {
+      const owner = core.state.drawerDevice?.deviceId;
+      const out = core.handle(deviceOf(ws), parsed, undefined, socketOf(ws));
+      this.deliver(out, ws);
+      if (core.state.drawerDevice?.deviceId !== owner) await this.after([]);
+      return;
+    }
     const refused = await this.refusal(deviceOf(ws), parsed).catch(() => null);
     if (refused) {
       send(ws, refused);
@@ -255,8 +292,11 @@ export class GameRoom extends DurableObject<Env> {
       await this.setLook(deviceOf(ws), parsed);
       return;
     }
+    const removed = parsed.t === "remove" ? new Set(core.state.removed?.devices) : null;
     const out = core.handle(deviceOf(ws), parsed, undefined, socketOf(ws));
     if (parsed.t === "act" && !out.some(({ message }) => message.t === "error")) this.movedNow = deviceOf(ws);
+    // The devices the host just removed are refused from now on: their open sockets too.
+    if (removed) this.closeAll((core.state.removed?.devices ?? []).filter((id) => !removed.has(id)), "removed");
     await this.after(out);
   }
 
@@ -281,7 +321,8 @@ export class GameRoom extends DurableObject<Env> {
       const hosts = Object.values(core.state.devices[core.state.hostDeviceId]?.players ?? {});
       if (deviceId !== core.state.hostDeviceId && (await anyBlocked(this.env, hosts, mine()))) return error("blocked");
     }
-    if (msg.t === "nudge") {
+    // A same-room table refuses every nudge (the room answers `not_allowed`).
+    if (msg.t === "nudge" && !core.sameRoom()) {
       const target = core.state.seats[msg.seat]?.playerId;
       if (target && (await anyBlocked(this.env, [target], mine()))) return { t: "nudgeSent", seat: msg.seat };
     }
@@ -290,22 +331,48 @@ export class GameRoom extends DurableObject<Env> {
 
   /**
    * How well the room knows a device, for the guard on joining by code: `member` (the host, a
-   * seat's device, or one that has been here before), `exists` (a stranger to a real room) or
-   * `none` (no such room).
+   * seat's device, or one that has been here before), `exists` (a stranger to a real room),
+   * `not_near` (a stranger to a same-room table without the TV's live near key, `near`) or
+   * `none` (no such room). `screen`: the device asks to be a screen, which no key decides.
+   * `games`: what the asking app can draw; one that can't draw this table's game needs no key,
+   * since `fetch` tells it there is no such table. Counts nothing: the guard tells the table of a
+   * `not_near` with `missedNear` once its rate limits have taken the guess.
    */
-  knows(deviceId: string): "member" | "exists" | "none" {
+  knows(deviceId: string, near: string | null = null, screen = false, games?: string[]): "member" | "exists" | "not_near" | "none" {
     const core = this.core;
     if (!core) return "none";
-    const { state } = core;
-    const member = core.isScreen(deviceId) || deviceId === state.hostDeviceId || state.devices[deviceId] !== undefined || core.controlledSeats(deviceId).length > 0;
-    return member ? "member" : "exists";
+    return core.knows(deviceId, near, screen, games);
   }
 
-  /** Whether `deviceId` may link a screen to this table (Task 7): the host or someone seated, never a screen. */
-  mayLink(deviceId: string): "ok" | "not_seated" | "none" {
+  /** Whether `near` is a live near key at this table: what `/e/<code>?near=` asks before it sends a phone on. Counts nothing. */
+  nearLive(near: string): boolean {
+    const core = this.core;
+    if (!core) return false;
+    return core.nearLive(near);
+  }
+
+  /**
+   * A wrong near guess, counted by the table itself (whatever address it came from) and kept
+   * across a wake. Only a guess the rate limits took counts: a locked-out guesser's refused ones
+   * never close the typed code (design §5.3).
+   */
+  missedNear(): void {
+    const core = this.core;
+    if (!core?.sameRoom()) return;
+    core.noteNearMiss();
+    this.persist(core);
+  }
+
+  /**
+   * Whether `deviceId` may link a screen to this table: the host or someone seated, never a
+   * screen. At a same-room table only the host may, since a link swaps its one screen; anyone
+   * else seated is `not_allowed`. A stranger hears `not_seated`, as for a table that isn't there.
+   */
+  mayLink(deviceId: string): "ok" | "not_seated" | "not_allowed" | "none" {
     const core = this.core;
     if (!core) return "none";
-    return core.mayLink(deviceId) ? "ok" : "not_seated";
+    if (!core.mayLink(deviceId)) return "not_seated";
+    return core.sameRoom() && deviceId !== core.state.hostDeviceId ? "not_allowed" : "ok";
   }
 
   /**
@@ -315,9 +382,24 @@ export class GameRoom extends DurableObject<Env> {
   async addScreen(deviceId: string): Promise<"ok" | "seated" | "none"> {
     if (!this.core) return "none";
     if (!this.core.mayScreen(deviceId)) return "seated";
-    this.core.addScreen(deviceId);
-    await this.after([]);
+    // A same-room table's old screen is refused from now on: its sockets close as a refusal would.
+    const { replaced, out } = this.core.addScreen(deviceId);
+    this.closeAll(replaced, "not_screen");
+    await this.after(out);
     return "ok";
+  }
+
+  /** Closes every socket of `devices` as a refusal (4403), with `reason`: the room no longer takes them. */
+  private closeAll(devices: readonly string[], reason: "not_screen" | "removed"): void {
+    for (const id of devices) {
+      for (const ws of this.ctx.getWebSockets(id)) {
+        try {
+          ws.close(REFUSED_CLOSURE, reason);
+        } catch {
+          // Already closing.
+        }
+      }
+    }
   }
 
   /**
@@ -507,7 +589,8 @@ export class GameRoom extends DurableObject<Env> {
       if (made === null || "off" in made) break;
       if ("ok" in made) {
         if (this.core) {
-          if (notifyOn(this.env)) this.ctx.waitUntil(this.pushPlayAgain(spec, code, made.first).catch(() => undefined));
+          // Nobody at a same-room table is pushed: they are all in the room (design §5.1).
+          if (notifyOn(this.env) && !this.core.sameRoom()) this.ctx.waitUntil(this.pushPlayAgain(spec, code, made.first).catch(() => undefined));
           await this.after(this.core.rematchDealt(code));
         }
         return;
@@ -804,11 +887,17 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.hasOpenSocket(deviceId, ws)) await this.after(this.core.disconnect(deviceId, asked));
   }
 
-  /** Sends each message to its sockets: every one, a device's, or one socket of a device. */
-  private deliver(out: Outbound[]): void {
+  /**
+   * Sends each message to its sockets: every one, a device's, or one socket of a device. Nothing
+   * is saved. `sender`'s own ink never goes back to it.
+   */
+  private deliver(out: Outbound[], sender?: WebSocket): void {
     for (const { to, message, socket } of out) {
       const sockets = to === "all" ? this.ctx.getWebSockets() : this.ctx.getWebSockets(to);
-      for (const ws of sockets) if (socket === undefined || socketOf(ws) === socket) send(ws, message);
+      for (const ws of sockets) {
+        if (socket !== undefined && socketOf(ws) !== socket) continue;
+        if (ws !== sender || message.t !== "ink") send(ws, message);
+      }
     }
   }
 
@@ -909,8 +998,11 @@ export class GameRoom extends DurableObject<Env> {
   private async updateTables(core: Room): Promise<void> {
     const { state } = core;
     const actor = state.status === "playing" ? core.actor() : null;
-    const devices = tableDevices(state);
-    const players = new Set(core.seatPlayers());
+    // A device the host turned away is off the list: it can't go back (design §10.2).
+    const devices = new Set([...tableDevices(state)].filter((id) => !core.turnedAway(id)));
+    // A player the host removed is off it too, on every device they sign in on (design §10.2).
+    const removedPlayers = new Set(state.removed?.players);
+    const players = new Set(core.seatPlayers().filter((p) => !removedPlayers.has(p)));
     const next = state.rematch?.code ?? null;
     // Who sits where, and as whom: a join, a rename or a new cat reaches Home's cards.
     const faces = state.seats.map((s) => [s.kind, s.person?.id, s.person?.name, s.person?.cat, s.playerId ?? s.deviceId]);
@@ -1016,6 +1108,11 @@ export class GameRoom extends DurableObject<Env> {
   }
 }
 
+/** The socket's `near` query: a near key or a typed near code, or null when it has none fit to check. */
+function nearParam(request: Request): string | null {
+  return parseNear(new URL(request.url).searchParams.get("near"));
+}
+
 /** The Worker's `x-play-player` header, or no players when it is missing or malformed. */
 function parsePlayers(header: string | null): Record<string, string> {
   if (!header) return {};
@@ -1048,13 +1145,18 @@ function tableDevices(state: RoomState<unknown>): Set<string> {
   return out;
 }
 
+/** What a socket remembers across a wake: its device, and whether that device is a kitten's (Purrtrait). */
+function attachment(ws: WebSocket): { deviceId: string; socket?: string; kitten?: true } {
+  return ws.deserializeAttachment() as { deviceId: string; socket?: string; kitten?: true };
+}
+
 function deviceOf(ws: WebSocket): string {
-  return (ws.deserializeAttachment() as { deviceId: string }).deviceId;
+  return attachment(ws).deviceId;
 }
 
 /** Which of its device's sockets this is. One opened before sockets had an id is "". */
 function socketOf(ws: WebSocket): string {
-  return (ws.deserializeAttachment() as { socket?: string }).socket ?? "";
+  return attachment(ws).socket ?? "";
 }
 
 function send(ws: WebSocket, message: ServerMessage): void {

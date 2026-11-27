@@ -1,6 +1,6 @@
 # Pounce: App Store Connect privacy and age rating answers
 
-Draft for JD Conley (Conley Chaos LLC) to review, 10 November 2026; updated 13 November 2026 for the first-run funnel (`docs/funnel.md`), and 21 November 2026 for the Daily Dish (no answer changes: its runs, results, stats and board are Gameplay Content, its TV board token is Device ID and User ID). This is not legal advice and needs legal review before submission. It is a checklist for entering the App Privacy "nutrition label" and the age rating questionnaire by hand in App Store Connect. Every answer comes from what the code does today (app `apps/play-ios`, server `apps/play-api`). It must agree with the app's privacy manifest (`apps/play-ios/Pounce/Resources/PrivacyInfo.xcprivacy`), the public policy (`apps/play-api/src/http/privacy.ts`, served at `https://play.conleychaos.com/privacy`) and `docs/privacy/retention-policy.md`. A test (`apps/play-api/src/http/privacy-label.test.ts`) checks that the manifest and this file list the same data types. Change all four together when a feature adds data.
+Draft for JD Conley (Conley Chaos LLC) to review, 10 November 2026; updated 13 November 2026 for the first-run funnel (`docs/funnel.md`), 21 November 2026 for the Daily Dish (no answer changes: its runs, results, stats and board are Gameplay Content, its TV board token is Device ID and User ID), and 26 November 2026 for Purrtrait, the draw-and-guess game (no new box: its drawings are Other User Content, kept only until the turn ends; the policy's lines show once Purrtrait tables can be dealt). This is not legal advice and needs legal review before submission. It is a checklist for entering the App Privacy "nutrition label" and the age rating questionnaire by hand in App Store Connect. Every answer comes from what the code does today (app `apps/play-ios`, server `apps/play-api`). It must agree with the app's privacy manifest (`apps/play-ios/Pounce/Resources/PrivacyInfo.xcprivacy`), the public policy (`apps/play-api/src/http/privacy.ts`, served at `https://play.conleychaos.com/privacy`) and `docs/privacy/retention-policy.md`. A test (`apps/play-api/src/http/privacy-label.test.ts`) checks that the manifest and this file list the same data types. Change all four together when a feature adds data.
 
 ## Before you start
 
@@ -29,11 +29,11 @@ Tick exactly these 9 boxes and nothing else.
 | Location | Precise Location, Coarse Location | No | Only the device's time zone name (for example America/Los_Angeles) is sent. That is broader than Apple's coarse location; it is declared under Other Data. |
 | Sensitive Info | Sensitive Info | No | |
 | Contacts | Contacts | No | Invites use the share sheet or a QR code. |
-| User Content | Emails or Text Messages | No | There is no chat. Nudges and requests to play are fixed messages. |
-| User Content | Photos or Videos, Audio Data | No | Show on TV uses the camera only to read the TV's QR code. The app keeps the code's text; the picture never leaves the phone and is never stored. |
+| User Content | Emails or Text Messages | No | There is no chat. Nudges and requests to play are fixed messages. In Purrtrait no drawings or guesses are typed; only the join code and a name. |
+| User Content | Photos or Videos, Audio Data | No | Show on TV uses the camera only to read the TV's QR code. The app keeps the code's text; the picture never leaves the phone and is never stored. A Purrtrait drawing isn't a photo, and no microphone is used: guesses are said out loud in the room. |
 | User Content | **Gameplay Content** | **Yes** | Seats, turns, game state, tables, streak days, rewards, daily puzzle runs and results, daily stats, and the family board built from them. |
 | User Content | Customer Support | No | Support is by email, outside the app. |
-| User Content | **Other User Content** | **Yes** | Table names that players type. |
+| User Content | **Other User Content** | **Yes** | Table names that players type, and drawings in Purrtrait, kept only until the turn ends. A drawing goes from the drawer's phone through our server to the table's TV and nowhere else; it is never stored. |
 | Browsing History | Browsing History | No | |
 | Search History | Search History | No | |
 | Identifiers | **User ID** | **Yes** | The server's player id, and a one-way hash of the Sign in with Apple id. |
@@ -89,7 +89,7 @@ Path: App Information, then **Age Rating**, then **Edit**. This uses Apple's 202
 | Parental Controls | **Yes** | A parent's consent controls notifications on a child's device and who may ask the child to play (Kittens panel). It mirrors Screen Time Communication Limits. |
 | Age Assurance | **Yes** | It asks every new player's age in a neutral way, using Declared Age Range (`requestAgeRange`) where it can, and applies age limits per band. |
 | Unrestricted Web Access | **No** | One in-app web view shows only Pounce's own notice-to-parents page. Links open our own pages or Mail. |
-| User-Generated Content | **Yes** | Players type their own names and table names, and other players at the table see them. There is no chat and no free text beyond names. |
+| User-Generated Content | **Yes** | Players type their own names and table names, and other players at the table see them. In Purrtrait the drawer draws a word, and the drawing shows only on that table's TV until the turn ends. There is no chat and no free text beyond names. |
 | Messaging and Chat | **No** | Nudges and requests to play are fixed messages with no typed text. |
 | Advertising | **No** | |
 
@@ -137,6 +137,7 @@ What the TV app does, from the code (`PounceTV/`, `PounceKit/Net`, and the files
 - **Gameplay Content.** The TV makes tables (`APIClient.createRoom(game:screen:)`, `POST /v1/rooms` with `screen: true`), and the server keeps its device id in the table's `screens` (`apps/play-api/src/index.ts:249`, `room/core.ts:374`). Tables are what the iPhone label means by Gameplay Content. App Functionality.
 - **App version.** The server's device index keeps `app_version` from the screen socket (`index.ts:285`, `room/device-index.ts:134`), so Other Data Types also has App Functionality.
 - **The Daily Dish board** (with `DAILY` on). A phone links its person's board to the TV (`POST /v1/screens/link` with `board`), and the TV keeps the board token it is given in the Keychain for 30 days (`KeychainBoardKeep`, service `com.conleychaos.play.tv`). The token names no one. The server keeps it by its SHA-256, bound to the TV's device id, until it expires or the phone unlinks it (`BoardTokens`, `Player.board_tokens`; retention policy). That is the Device ID and User ID already declared, for App Functionality. The TV then shows the names, cats and daily results of that person and the people they have a streak with, and a run its player chose to show (Show on TV). It receives them and keeps none of them on the TV; on the server they are the Gameplay Content and Name already declared. The TV collects nothing new from whoever is watching.
+- **Purrtrait drawings.** At a Purrtrait table the TV shows the drawing the drawer's phone sends, live, and keeps it in memory only until the turn ends. The TV sends no drawing, and the server stores none (the Other User Content already declared, for the phone that draws).
 - **Nothing else.** The TV collects no player name, age band, phone number, push token, camera, microphone, location or time zone. It asks for no permissions. It sends no table names or text. It keeps a table code and the sound setting on the device only (`UserDefaults`, `DefaultsScreenKeep`), and a board token in the Keychain (above).
 - **Not tracking.** No ad SDK, no IDFA, no tracking domains.
 
