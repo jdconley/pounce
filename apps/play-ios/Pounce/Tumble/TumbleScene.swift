@@ -64,6 +64,7 @@ final class TumbleScene: SKScene {
     let accessibilityPool = TumbleAccessibilityPool()
     #if DEBUG
     var autoplay: TumbleAutoplay?
+    private var watchedFrames = false
     #endif
 
     /// One finger on the table (`TumbleInput.swift`).
@@ -118,6 +119,7 @@ final class TumbleScene: SKScene {
         speed = CGFloat(Pace.factor)
         #if DEBUG
         if autoplay == nil { autoplay = TumbleAutoplay.start(self) }
+        watchedFrames = false
         #endif
         needsLayout = true
         // The textures are drawn off the main thread; until they come the boxes wait, then are made again.
@@ -152,6 +154,11 @@ final class TumbleScene: SKScene {
 
     override func update(_ currentTime: TimeInterval) {
         let work = FrameWork("tumble.frame"); defer { work.end() }
+        #if DEBUG
+        // The table never pauses while a round plays: every frame is a frame the gates judge.
+        MainThreadWatchdog.shared?.tableFrame(currentTime, resumed: !watchedFrames)
+        watchedFrames = true
+        #endif
         let now = TumbleTable.now()
         // A snapshot the table hasn't seen (its owner may also hand it over; updating twice is a no-op).
         if store.lastSeq != seenSeq, let room = store.room {

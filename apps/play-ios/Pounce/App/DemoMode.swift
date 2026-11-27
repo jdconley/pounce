@@ -85,6 +85,8 @@ enum DemoMode: String {
     /// Toy Tumble against House Cat boxes on the device (`TumbleDemo`), its lobby, and at a TV.
     case tumblePlay = "tumble-play", tumbleSix = "tumble-six", tumbleTwo = "tumble-two", tumbleTV = "tumble-tv"
     case tumbleCountdown = "tumble-countdown", tumbleLobby = "tumble-lobby", tumbleJunk = "tumble-junk"
+    /// The style checkpoint (spec §11): all nine toys, hairball rows and every badge, full size and mini.
+    case tumbleSheet = "tumble-sheet"
 
     /// A tile game demo.
     var isTiles: Bool { rawValue.hasPrefix("tiles") || rawValue.hasPrefix("controller-tiles") }
@@ -130,7 +132,7 @@ enum DemoMode: String {
         case .birdBid, .birdNest, .birdTrump, .birdPlay, .birdWatch, .birdPartner, .birdPartnerMark, .birdSix, .birdBetween,
              .birdOver, .birdCurtain, .birdTV, .birdLobby, .birdLobbyReady:
             return BirdDemo.room(self)
-        case .tumblePlay, .tumbleSix, .tumbleTwo, .tumbleTV, .tumbleCountdown, .tumbleLobby, .tumbleJunk:
+        case .tumblePlay, .tumbleSix, .tumbleTwo, .tumbleTV, .tumbleCountdown, .tumbleLobby, .tumbleJunk, .tumbleSheet:
             return TumbleDemo.room(self)
         case .tiles, .tilesEarly, .tilesOpened, .tilesDraft, .tilesInvalid, .tilesLoupe, .tilesLate, .tilesLong,
              .tilesPass, .tilesOther, .tilesCurtain, .tilesOver, .tilesPlay, .tilesLast,

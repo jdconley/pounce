@@ -24,6 +24,9 @@ public final class TumbleDemoRoom {
         public var toWin = 3
         /// A rows-deep stack every box starts with, so clears and junk come early.
         public var stack = 0
+        /// The style checkpoint: every box holds all nine toys, hairball rows and every trick badge,
+        /// and nothing moves.
+        public var sheet = false
         /// A screen (the TV) watches: no seat is this device's.
         public var screen = false
         public var names: [String] = ["Sam", "Mia", "Leo", "Ivy", "Max", "Zoe"]
@@ -122,6 +125,12 @@ public final class TumbleDemoRoom {
                 }
             }
         }
+        if o.sheet, let sheet = try? TumbleText.box(cells: Self.sheetCells, tricks: Self.sheetTricks) {
+            for s in 0..<n {
+                boxes[s].cells = sheet.cells
+                boxes[s].tricks = sheet.tricks
+            }
+        }
         if let mine { boxes[mine].held = o.held }
         q = Array(repeating: 0, count: n)
         plans = [:]
@@ -131,8 +140,32 @@ public final class TumbleDemoRoom {
         owed = [:]
         betweenUntil = nil
         let start = t.startsAt ?? now
-        for s in 0..<n where s != mine { plans[s] = plan(s, at: start + think()) }
+        for s in 0..<n where s != mine { plans[s] = plan(s, at: start + (o.sheet ? 1e12 : think())) }
     }
+
+    /// The nine toys, each in its own colour (1 to 9 in `TumbleToy` order), over three hairball rows.
+    static let sheetCells = [
+        "....8.......",
+        "...888...9.9",
+        "3...8....999",
+        "3...........",
+        "3.44..5....7",
+        "3.44.555.777",
+        "..........66",
+        "111..2.....6",
+        "....22....66",
+        "#####.######",
+        "##.#########",
+        "########.###",
+    ]
+    /// Every trick's badge (a to h) on a cell.
+    static let sheetTricks = [
+        "", "", "", "", "", "", "", "",
+        "a...........",
+        ".....b....c.",
+        "..d....e....",
+        "f...g.....h.",
+    ]
 
     private func think() -> Double { o.think.lowerBound + roll() * (o.think.upperBound - o.think.lowerBound) }
 

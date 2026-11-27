@@ -36,6 +36,16 @@ final class FrameRateTVTests: XCTestCase {
         measure(app, as: "tv-cat-tower-6")
     }
 
+    /// Toy Tumble with six boxes for a minute (spec §7, Review Focus 5): every box a House Cat's,
+    /// toys gliding between position updates, junk and tricks flying between boxes.
+    func testToyTumbleSixBoxesPlaysAtTheTopFrameRate() {
+        let app = Live.demo("tv-tumble", speed: 1)
+        app.launchArguments += ["-seats", "6"]
+        app.launch()
+        XCTAssertTrue(el(app, "tumble.mini.5").waitForExistence(timeout: Live.t(20)), "the Toy Tumble table never came up")
+        measure(app, as: "tv-toy-tumble-6", minimum: 60)
+    }
+
     /// Tuna Tiles with four seats: a phone's draft growing on the rug, the play landing, draws.
     func testTunaTilesFourSeatsPlaysAtTheTopFrameRate() {
         let app = Live.demo("tv-tiles", speed: 1)
@@ -83,7 +93,11 @@ final class FrameRateTVTests: XCTestCase {
 
     // MARK: the gate
 
-    private func measure(_ app: XCUIApplication, as name: String, from baseline: Watchdog? = nil, table: Bool = true, file: StaticString = #filePath, line: UInt = #line) {
+    private func measure(
+        _ app: XCUIApplication, as name: String, from baseline: Watchdog? = nil, table: Bool = true, minimum: Double = 0,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        let seconds = max(self.seconds, minimum)
         let before = baseline ?? gameplayBaseline(app)
         // Only waiting: nothing reads the screen while the table plays.
         if baseline == nil { Thread.sleep(forTimeInterval: seconds) }

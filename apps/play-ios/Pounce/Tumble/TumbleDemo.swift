@@ -21,6 +21,9 @@ enum TumbleDemo {
         case .tumbleSix: o.seats = 6
         case .tumbleTwo: o.seats = 2
         case .tumbleCountdown: o.playing = false
+        case .tumbleSheet:
+            o.sheet = true
+            o.held = TumbleTrick.allCases.prefix(6).map { $0 }
         case .tumbleJunk:
             o.stack = 4
             o.held = [.hairball, .swipe, .nap, .bath]
