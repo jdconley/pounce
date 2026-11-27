@@ -152,9 +152,11 @@ final class PurrtraitTests: XCTestCase {
             ("lobby", "purr-lobby", "purr.timer.60", { _ in }),
         ]
         let landscape = (env["PURR_SHOTS_ORIENTATION"] ?? env["TEST_RUNNER_PURR_SHOTS_ORIENTATION"]) == "landscape"
+        // `PURR_SHOTS_ONLY=lobby,over`: just those screens.
+        let only = (env["PURR_SHOTS_ONLY"] ?? env["TEST_RUNNER_PURR_SHOTS_ONLY"]).map { Set($0.split(separator: ",").map(String.init)) }
         XCUIDevice.shared.orientation = landscape ? .landscapeLeft : .portrait
         defer { XCUIDevice.shared.orientation = .portrait }
-        for (name, demo, ready, act) in shots {
+        for (name, demo, ready, act) in shots where only?.contains(name) ?? true {
             let app = launch(demo, extra: long)
             XCTAssertTrue(el(app, ready).waitForExistence(timeout: Live.t(10)), "\(name): never ready")
             act(app)
