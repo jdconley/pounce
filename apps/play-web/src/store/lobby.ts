@@ -23,9 +23,9 @@ export type StartBlock =
 export const mySeats = (room: RoomView): number[] => room.seats.flatMap((s, i) => (s.yours && s.kind === "human" ? [i] : []));
 export const openSeats = (room: RoomView): number[] => room.seats.flatMap((s, i) => (s.kind === "open" ? [i] : []));
 export const playerCount = (room: RoomView): number => room.seats.filter((s) => s.kind === "human" || s.kind === "bot").length;
-
+/** Toy Tumble: each person plays on their own device, at once. */
 /** Toy Tumble: each person plays on their own device, at once. The game ids don't list it until its server module lands. */
-const realTime = (room: Pick<RoomView, "gameId">): boolean => (room.gameId as string | undefined) === "tumble";
+const realTime = (room: Pick<RoomView, "gameId">): boolean => room.gameId === "tumble";
 
 /** At a Toy Tumble table, the people whose device isn't connected: Start waits for them. */
 export function waitingSeats(room: RoomView): number[] {
