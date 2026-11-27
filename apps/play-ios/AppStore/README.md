@@ -6,9 +6,9 @@ messages, no server); nothing is drawn by hand except the caption and the backgr
 
 | File | What |
 | --- | --- |
-| `screenshots/iphone-1.jpg` … `8` | 1206x2622, the required iPhone set (Dynamic Island, medium display; iPhone 17 Pro) |
-| `screenshots/ipad-1.jpg` … `8` | 2064x2752, the 13" iPad set |
-| `screenshots/tv-1.jpg` … `7` | 1920x1080, the Apple TV set (home, Tonight's board, lobby, Cat Tower, Tuna Tiles, game over, a watched Sniff run) |
+| `screenshots/iphone-1.jpg` … `10` | 1206x2622, the required iPhone set (Dynamic Island, medium display; iPhone 17 Pro) |
+| `screenshots/ipad-1.jpg` … `10` | 2064x2752, the 13" iPad set |
+| `screenshots/tv-1.jpg` … `8` | 1920x1080, the Apple TV set (home, Birdwatch, Tonight's board, lobby, Cat Tower, Tuna Tiles, game over, a watched Sniff run) |
 | `previews/iphone-preview.mp4` | 886x1920, 25.4 s (recorded on an iPhone 17 Pro Max, cut to the size the iPhone slot takes) |
 | `previews/ipad-preview.mp4` | 1200x1600, 25.4 s |
 | `captions.json`, `captions.md` | The captions and what backs each one |
@@ -27,13 +27,13 @@ xcodebuild -project Pounce.xcodeproj -scheme Pounce -destination "platform=iOS S
 xcrun simctl install <udid> <DerivedData>/Build/Products/Debug-iphonesimulator/Pounce.app
 AppStore/capture.sh iphone <iPhone 17 Pro udid>   # raw/iphone/*.png
 AppStore/capture.sh ipad <iPad Pro 13-inch (M5) udid>   # raw/ipad/*.png
-AppStore/capture.sh iphone <udid> 2-dish 3-puzzle       # only those shots
+AppStore/capture.sh iphone <udid> 2-bird 3-trump        # only those shots
 swift AppStore/compose.swift                            # screenshots/*.jpg (keeps a shot with no raw capture)
 AppStore/preview.sh iphone <udid>                       # previews/iphone-preview.mp4
 AppStore/preview.sh ipad <udid>
 ```
 
-The Daily Dish shots (2 and 3) use `-demo-dish done` (the Dish from memory) and
+The Birdwatch shots (2 and 3) are `-demo bird-play` and `-demo bird-trump`. The Daily Dish shots (4 and 5) use `-demo-dish done` (the Dish from memory) and
 `-show-daily nine-lives`, which plays Nine Lives half filled against an in-app referee
 (`NineLivesDemoServer`), with no server.
 
@@ -105,13 +105,13 @@ that is linked to a table, so a dev server and browser phones play it.
 ```sh
 xcodebuild -project Pounce.xcodeproj -scheme PounceTV -destination "platform=tvOS Simulator,id=<udid>" build
 xcrun simctl install <udid> <DerivedData>/Build/Products/Debug-appletvsimulator/PounceTV.app
-AppStore/capture-tv.sh <udid>        # raw/tv/cattower.png, tiles.png, gameover.png (tv-4, tv-5, tv-6)
-# raw/tv/lobby.png (tv-3): AppStore/tv-live.spec.ts, against your own dev server
+AppStore/capture-tv.sh <udid>        # raw/tv/birdwatch.png, cattower.png, tiles.png, gameover.png (tv-2, tv-5, tv-6, tv-7)
+# raw/tv/lobby.png (tv-4): AppStore/tv-live.spec.ts, against your own dev server
 # (its header says how); never port 4343.
 sips -s format jpeg -s formatOptions 92 AppStore/raw/tv/<name>.png --out AppStore/screenshots/tv-<n>.jpg
 ```
 
-Home, Tonight's board and the watched Sniff run (tv-1, tv-2, tv-7) come from the Debug build's
+Home, Tonight's board and the watched Sniff run (tv-1, tv-3, tv-8) come from the Debug build's
 `-demo tv-board` (an evening of the Daily Dish on a fake board socket), played by
 `PounceTVUITests/BoardShotTests`, which presses Watch on the remote:
 
@@ -122,8 +122,8 @@ TEST_RUNNER_TV_SHOTS_DIR=<dir> TEST_RUNNER_POUNCE_DEMO_CAST="Jess,Sam,Ruby,Theo,
 # <dir>/appletv-home.png, appletv-board.png, appletv-watch.png
 ```
 
-The cast's fourth name takes the hint badge, so keep it short. In 1.2, tv-3 to tv-6 are the 1.1
-shots (lobby, Cat Tower, Tuna Tiles, game over) under new numbers.
+The cast's fourth name takes the hint badge, so keep it short. In 1.3, tv-2 (Birdwatch) is new and
+tv-1 shows its poster; tv-3 to tv-8 are the 1.2 shots under new numbers.
 
 Look at each shot before converting it: the seats' scores behind game over must all show. Delete
 the simulator afterwards.

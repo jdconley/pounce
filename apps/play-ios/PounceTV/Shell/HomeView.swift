@@ -1,20 +1,23 @@
 import PounceKit
 import SwiftUI
 
-/// The TV's home: on the left, the link a phone scans (or types the code of) to put its table, or
-/// its Daily Dish board, here; on the right, the two games' posters, each making a table with this
-/// TV as its screen, and Tonight's board while the server has the Dish on. Nothing is typed on
-/// the TV. Menu here leaves the app, as tvOS users expect (or closes the board's link panel).
+/// The TV's home: across the top, the link a phone scans (or types the code of) to put its table,
+/// or its Daily Dish board, here; under it a shelf of posters, one per game, each making a table
+/// with this TV as its screen, and Tonight's board while the server has the Dish on. The remote
+/// moves along the shelf left to right. Nothing is typed on the TV. Menu here leaves the app, as
+/// tvOS users expect (or closes the board's link panel).
+///
+/// Sized for the TV's 1920x1080 points inside its safe area (80 at the sides, 60 at the top and
+/// bottom): the link row and the shelf take about 930 of the 960 between. The posters fill the 1760
+/// across (`PosterShelf`), leaving room for the focus ring and its grow.
 struct HomeView: View {
     let model: TVModel
     @FocusState private var focus: String?
 
     var body: some View {
-        HStack(alignment: .center, spacing: 110) {
+        VStack(spacing: 44) {
             link
-                .frame(width: 700)
             posters
-                .frame(width: 860)
                 .focusSection()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -41,34 +44,35 @@ struct HomeView: View {
         .defaultFocus($focus, GameCatalog.catTower.id)
     }
 
+    /// What to do, and the code to type, beside the QR.
     private var link: some View {
-        VStack(spacing: 34) {
-            OutlinedText(
-                String(localized: "Scan with your phone to put your table here", comment: "TV home: over the QR a phone scans to link its table"),
-                size: 54, width: 4, lines: 2)
-                .frame(maxWidth: .infinity)
-                .fixedSize(horizontal: false, vertical: true)
-            TVQRCode(text: model.homeLink?.url.absoluteString, side: 400)
+        HStack(alignment: .center, spacing: 72) {
+            VStack(alignment: .leading, spacing: 30) {
+                OutlinedText(
+                    String(localized: "Scan with your phone to put your table here", comment: "TV home: over the QR a phone scans to link its table"),
+                    size: 58, width: 4, lines: 2, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                TVCode(code: model.homeLink?.code, size: 84, label: String(localized: "Code", comment: "TV: VoiceOver, before a link's backup code is spelled out"))
+                    .accessibilityIdentifier("tv.home.code")
+            }
+            .frame(width: 780, alignment: .leading)
+            TVQRCode(text: model.homeLink?.url.absoluteString, side: 300)
                 .accessibilityLabel(Text("QR code to put a table on this TV", comment: "TV home: the link's QR, for VoiceOver"))
-            TVCode(code: model.homeLink?.code, label: String(localized: "Code", comment: "TV: VoiceOver, before a link's backup code is spelled out"))
-                .accessibilityIdentifier("tv.home.code")
         }
     }
 
     private var posters: some View {
-        // The games and, with the Dish on, its board share the height.
-        let count = GameCatalog.all.count + (model.dishOn ? 1 : 0)
-        let height: CGFloat = count >= 5 ? 166 : count == 4 ? 212 : count == 3 ? 284 : 360
-        return VStack(spacing: count >= 5 ? 18 : count == 4 ? 26 : count == 3 ? 36 : 60) {
+        let shelf = PosterShelf(count: GameCatalog.all.count + (model.dishOn ? 1 : 0))
+        return HStack(alignment: .top, spacing: shelf.gap) {
             ForEach(GameCatalog.all) { game in
-                Poster(game: game, refused: model.refused, height: height) {
+                Poster(game: game, shelf: shelf, refused: model.refused) {
                     Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.5)
                     Task { await model.make(game: game.id) }
                 }
                 .focused($focus, equals: game.id)
             }
             if model.dishOn {
-                BoardPoster(height: height) {
+                BoardPoster(shelf: shelf) {
                     Sound.shared.play(ArtName.Sound.sfxPop, volume: 0.5)
                     model.pressBoard()
                 }
@@ -78,7 +82,81 @@ struct HomeView: View {
     }
 }
 
-/// A game's poster: its cover on the left, its name and how many play on the right.
+/// The shelf's sizes. Four posters of 404 with 48 between fill the 1760 across; five (the games
+/// and Tonight's board) narrow to 323 with 36 between, with smaller words.
+private struct PosterShelf {
+    static let across: CGFloat = 1760
+    static let artHeight: CGFloat = 236
+    static let wordsHeight: CGFloat = 262
+
+    let width: CGFloat
+    let gap: CGFloat
+
+    init(count: Int) {
+        let n = CGFloat(max(count, 1))
+        gap = count >= 5 ? 36 : 48
+        width = min(404, ((Self.across - gap * (n - 1)) / n).rounded(.down))
+    }
+
+    var narrow: Bool { width < 380 }
+    var title: CGFloat { narrow ? 48 : 58 }
+    var pill: CGFloat { narrow ? 26 : 30 }
+    var inset: CGFloat { narrow ? 20 : 26 }
+}
+
+/// A poster on the shelf: art across the top, then the name (up to two lines) and a pill.
+private struct PosterCard<Art: View, Badge: View>: View {
+    let title: String
+    let shelf: PosterShelf
+    @ViewBuilder let art: Art
+    @ViewBuilder let badge: Badge
+
+    var body: some View {
+        VStack(spacing: 0) {
+            art
+                .frame(width: shelf.width, height: PosterShelf.artHeight)
+                .clipped()
+                // Decoration: the button says its name, and a drawn-big sunburst inside mustn't
+                // widen the poster's frame for VoiceOver or the UI tests.
+                .accessibilityHidden(true)
+                .overlay(alignment: .bottom) { Rectangle().fill(Palette.ink).frame(height: 6) }
+            VStack(alignment: .leading, spacing: 0) {
+                OutlinedText(title, size: shelf.title, width: 5, lines: 2, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 12)
+                badge
+            }
+            .padding(.horizontal, shelf.inset)
+            .padding(.top, 20)
+            .padding(.bottom, 28)
+            .frame(width: shelf.width, height: PosterShelf.wordsHeight, alignment: .topLeading)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
+    }
+}
+
+/// The pill under a poster's name.
+private struct PosterPill<Lead: View>: View {
+    let words: String
+    var size: CGFloat = 30
+    @ViewBuilder let lead: Lead
+
+    var body: some View {
+        HStack(spacing: 12) {
+            lead
+            Text(verbatim: words)
+                .font(.system(size: size, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(Palette.ink.opacity(0.5)))
+    }
+}
+
+/// A game's poster: its cover, its name and how many play.
 private struct Poster: View {
     static func tint(_ game: GameCatalog.Entry) -> Color {
         switch game.id {
@@ -90,31 +168,28 @@ private struct Poster: View {
     }
 
     let game: GameCatalog.Entry
+    let shelf: PosterShelf
     let refused: Int
-    var height: CGFloat = 360
     let press: () -> Void
     @FocusState private var focused: Bool
     @State private var shakes = 0
 
     var body: some View {
         Button(action: press) {
-            HStack(spacing: 0) {
+            PosterCard(title: game.title, shelf: shelf) {
                 Image(game.art)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 380, height: height)
-                    .clipped()
-                    .overlay(alignment: .trailing) { Rectangle().fill(Palette.ink).frame(width: 6) }
-                VStack(alignment: .leading, spacing: height < 180 ? 14 : 30) {
-                    OutlinedText(game.title, size: height < 180 ? 54 : height < 240 ? 64 : height < 360 ? 76 : 84, width: 5, lines: 2, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                    players
+            } badge: {
+                // "2 to 6 players" under a dot in each seat's colour: a row of its own, since
+                // Purrtrait's ten dots and its words don't fit in one pill.
+                VStack(alignment: .leading, spacing: 10) {
+                    dots.padding(.leading, 6)
+                    PosterPill(
+                        words: String(localized: "\(game.minPlayers) to \(game.maxPlayers) players", comment: "TV home: under a game's name, how many can play"),
+                        size: shelf.pill) { EmptyView() }
                 }
-                .padding(.horizontal, 36)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(height: height)
-            .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
         }
         .buttonStyle(TVButtonStyle(tint: Self.tint(game), corner: 40))
         .focused($focused)
@@ -129,79 +204,52 @@ private struct Poster: View {
         .accessibilityIdentifier("tv.poster.\(game.id)")
     }
 
-    /// "2 to 6 players", with a dot in each seat's colour.
-    private var players: some View {
-        HStack(spacing: 14) {
-            HStack(spacing: -6) {
-                // Six dots at most: ten would push the words off a Purrtrait poster.
-                ForEach(0..<min(game.maxPlayers, 6), id: \.self) { seat in
-                    Circle()
-                        .fill(tvRing(seat))
-                        .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 3))
-                        .frame(width: 26, height: 26)
-                }
+    private var dots: some View {
+        HStack(spacing: -5) {
+            ForEach(0..<game.maxPlayers, id: \.self) { seat in
+                Circle()
+                    .fill(tvRing(seat))
+                    .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 3))
+                    .frame(width: 20, height: 20)
             }
-            Text("\(game.minPlayers) to \(game.maxPlayers) players", comment: "TV home: under a game's name, how many can play")
-                .font(.system(size: 32, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .fixedSize()
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 10)
-        .background(Capsule().fill(Palette.ink.opacity(0.5)))
     }
 }
 
 /// Tonight's board: the Daily Dish's board on this TV. Opens the kept board, or its link.
 private struct BoardPoster: View {
-    let height: CGFloat
+    let shelf: PosterShelf
     let press: () -> Void
 
     var body: some View {
         Button(action: press) {
-            HStack(spacing: 0) {
+            PosterCard(title: String(localized: "Tonight's board", comment: "TV home: the Daily Dish board's poster"), shelf: shelf) {
                 ZStack {
                     LinearGradient(colors: [Color(hex: 0xFFE066), Palette.orange], startPoint: .top, endPoint: .bottom)
-                    Image(ArtName.sunburst)
-                        .resizable()
-                        .frame(width: 640, height: 640)
-                        .opacity(0.55)
-                        .frame(width: 380, height: height)
-                        .clipped()
+                    // The sunburst, 640 across from the art's middle, drawn in a canvas the art's
+                    // size: a 640-point view inside would widen the poster's frame past the screen.
+                    Canvas { context, size in
+                        context.opacity = 0.55
+                        context.draw(
+                            Image(ArtName.sunburst),
+                            in: CGRect(x: (size.width - 640) / 2, y: (size.height - 640) / 2, width: 640, height: 640))
+                    }
                     Image(ArtName.iconTrophy)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 150, height: 150)
-                        .offset(y: -30)
+                        .frame(width: 140, height: 140)
+                        .offset(y: -34)
                     HStack {
-                        Image(ArtName.cat(3, .celebrate)).resizable().scaledToFit().frame(width: 150, height: 150)
+                        Image(ArtName.cat(3, .celebrate)).resizable().scaledToFit().frame(width: 140, height: 140)
                         Spacer()
-                        Image(ArtName.cat(5, .leap)).resizable().scaledToFit().frame(width: 150, height: 150)
+                        Image(ArtName.cat(5, .leap)).resizable().scaledToFit().frame(width: 140, height: 140)
                     }
-                    .padding(.horizontal, 6)
-                    .frame(width: 380, height: height, alignment: .bottom)
+                    .padding(.horizontal, 12)
+                    .frame(width: shelf.width, height: PosterShelf.artHeight, alignment: .bottom)
                 }
-                .frame(width: 380, height: height)
-                .clipped()
-                .overlay(alignment: .trailing) { Rectangle().fill(Palette.ink).frame(width: 6) }
-                VStack(alignment: .leading, spacing: 24) {
-                    OutlinedText(String(localized: "Tonight's board", comment: "TV home: the Daily Dish board's poster"), size: height < 180 ? 54 : 76, width: 5, lines: 2, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Daily puzzles", comment: "TV home: under Tonight's board, what it is")
-                        .font(.system(size: 32, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(Palette.ink.opacity(0.5)))
-                }
-                .padding(.horizontal, 36)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            } badge: {
+                PosterPill(words: String(localized: "Daily puzzles", comment: "TV home: under Tonight's board, what it is"), size: shelf.pill) { EmptyView() }
             }
-            .frame(height: height)
-            .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
         }
         .buttonStyle(TVButtonStyle(tint: Palette.magenta, corner: 40))
         .accessibilityLabel(Text("Tonight's board", comment: "TV home: the Daily Dish board's poster"))

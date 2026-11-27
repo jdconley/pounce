@@ -2,11 +2,12 @@
 import PounceKit
 import SwiftUI
 
-/// DEBUG launch arguments `-tv-preview <cattower|tiles> [-seats N] [-aim]`: the TV's table for a
-/// hand-made room (`DemoFixtures`), fed to a screen's store with no server, full screen. For
-/// screenshots and for looking at the TV table before the shell around it exists. `-seats` is 2
-/// to 6 for Cat Tower and 2 to 4 for Tuna Tiles; one player has a 20-character name and the scores
-/// run to three digits. `-aim` adds the acting player's aim from their phone: a laid group in Cat
+/// DEBUG launch arguments `-tv-preview <cattower|tiles|birdwatch> [-seats N] [-aim]`: the TV's
+/// table for a hand-made room (`DemoFixtures`), fed to a screen's store with no server, full
+/// screen. For screenshots and for looking at the TV table before the shell around it exists.
+/// `-seats` is 2 to 6 for Cat Tower and 2 to 4 for Tuna Tiles; one player has a 20-character name
+/// (or the second name in `POUNCE_DEMO_CAST`, for the App Store shots) and the scores run to three
+/// digits. `-aim` adds the acting player's aim from their phone: a laid group in Cat
 /// Tower, a draft adding pieces in Tuna Tiles. `-moment`: a second in, Kiki lays down (Cat Tower's
 /// big moment). `-lost`: a second in, the TV loses the table ("Reconnecting"). `-cancel` (with
 /// `-aim`): two seconds in, the player takes their aim back and no play follows. `-busy`: the table
@@ -34,7 +35,7 @@ enum TVTablePreview {
             seat.yours = false
             return seat
         }
-        if room.seats[1].kind == .human { room.seats[1].person?.name = longName }
+        if room.seats[1].kind == .human { room.seats[1].person?.name = DemoFixtures.castName(1, longName) }
         var game = room.game!
         game.turn = 1
         game.step = .play
@@ -72,7 +73,7 @@ enum TVTablePreview {
             seat.yours = false
             return seat
         }
-        if room.seats[1].kind == .human { room.seats[1].person?.name = longName }
+        if room.seats[1].kind == .human { room.seats[1].person?.name = DemoFixtures.castName(1, longName) }
         var view = room.birdwatch!
         view.hands = [:]
         view.playable = nil
@@ -99,7 +100,7 @@ enum TVTablePreview {
             seat.yours = false
             return seat
         }
-        if room.seats[1].kind == .human { room.seats[1].person?.name = longName }
+        if room.seats[1].kind == .human { room.seats[1].person?.name = DemoFixtures.castName(1, longName) }
         room.tiles!.racks = [:]
         room.tiles!.rackCounts[0] = 9
         room.youAreHost = false

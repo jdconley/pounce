@@ -10,13 +10,13 @@ final class RemoteTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    /// Home: Cat Tower has the focus and Down/Up move between the posters. Select on a poster
+    /// Home: Cat Tower has the focus and Right/Left move along the posters. Select on a poster
     /// makes a table and shows its lobby, where Change game has the focus while nobody sits and
     /// swaps the game. The paw is reachable from there, and Select on it opens the menu.
     func testAPosterMakesATableAndChangeGameSwapsIt() {
         let app = launchHome()
-        press(app, .down, to: "tv.poster.tiles")
-        press(app, .up, to: "tv.poster.cat-tower")
+        press(app, .right, to: "tv.poster.tiles")
+        press(app, .left, to: "tv.poster.cat-tower")
 
         press(app, .select)
         XCTAssertTrue(until(10) { self.label(self.el(app, "tv.lobby.game")) == "Cat Tower" }, "Select on Cat Tower didn't show its lobby")
@@ -134,8 +134,24 @@ final class RemoteTests: XCTestCase {
     // MARK: helpers
 
     /// The shell's demo at home, its link shown and Cat Tower focused.
-    private func launchHome() -> XCUIApplication {
+    /// Home with the Dish on: five posters on the shelf, Right walks them in order and Left
+    /// comes back. Each poster is wholly on screen.
+    func testHomeShelfWalksEveryPoster() {
+        let app = launchHome(dish: true)
+        let shelf = ["tv.poster.cat-tower", "tv.poster.tiles", "tv.poster.birdwatch", "tv.poster.purrtrait", "tv.poster.board"]
+        XCTAssertTrue(el(app, "tv.poster.board").waitForExistence(timeout: Live.t(10)), "no Tonight's board poster with the Dish on")
+        let screen = app.windows.firstMatch.frame
+        for id in shelf {
+            let frame = el(app, id).frame
+            XCTAssertTrue(screen.contains(frame), "\(id) runs off the screen: \(frame) in \(screen)")
+        }
+        for id in shelf.dropFirst() { press(app, .right, to: id) }
+        for id in shelf.reversed().dropFirst() { press(app, .left, to: id) }
+    }
+
+    private func launchHome(dish: Bool = false) -> XCUIApplication {
         let app = Live.demo("tv-shell", speed: 4)
+        if dish { app.launchArguments.append("-dish") }
         app.launch()
         XCTAssertTrue(waitForFocus(app, "tv.poster.cat-tower", timeout: 20), "home didn't open with Cat Tower focused: \(focusedID(app) ?? "nothing")")
         XCTAssertTrue(until(5) { (self.label(self.el(app, "tv.home.code")) ?? "").contains("K T N P W S") }, "home's link isn't shown")

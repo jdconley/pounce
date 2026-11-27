@@ -214,6 +214,30 @@ extension BirdTableModel.Panel {
         #expect(layout.seatSpots.count == 6)
         #expect(layout.seatSpots[0].y < layout.sill.minY)
     }
+
+    /// A TV's side seats hang their tags level with the sill: a tag's room stops 12 short of it,
+    /// so a long name is cut instead of running under it. At every seat count.
+    @Test func aTVTagNeverRunsUnderTheSill() {
+        for others in 4...6 {
+            let layout = BirdLayout(size: CGSize(width: 1920, height: 1080), safeTop: 60, safeBottom: 60, others: others, handCount: 0, mode: .tv)
+            let tag: CGFloat = 38 * 1.4
+            for (i, spot) in layout.seatSpots.enumerated() {
+                let room = layout.tagRoom(at: i, tagHeight: tag)
+                #expect(spot.x - room.left >= 8, "\(others) seats, seat \(i): off the left edge")
+                #expect(spot.x + room.right <= 1912, "\(others) seats, seat \(i): off the right edge")
+                let middle = spot.y - layout.catSide * 0.5 - tag * 0.35
+                let level = middle + tag / 2 > layout.sill.minY && middle - tag / 2 < layout.sill.maxY
+                guard level else { continue }
+                if spot.x < layout.sill.minX { #expect(spot.x + room.right <= layout.sill.minX - 12, "\(others) seats, seat \(i)") }
+                if spot.x > layout.sill.maxX { #expect(spot.x - room.left >= layout.sill.maxX + 12, "\(others) seats, seat \(i)") }
+                // Room enough for a short name at the TV's 28 points.
+                #expect(room.left + room.right >= 200, "\(others) seats, seat \(i): only \(room.left + room.right)")
+            }
+        }
+        let four = BirdLayout(size: CGSize(width: 1920, height: 1080), safeTop: 60, safeBottom: 60, others: 4, handCount: 0, mode: .tv)
+        let sides = four.seatSpots.indices.filter { four.tagRoom(at: $0, tagHeight: 38 * 1.4).right < four.size.width - four.seatSpots[$0].x - 8 }
+        #expect(!sides.isEmpty, "at four seats a side seat's tag is level with the sill")
+    }
 }
 
 @Suite struct BirdLobbyHouseCatTests {
