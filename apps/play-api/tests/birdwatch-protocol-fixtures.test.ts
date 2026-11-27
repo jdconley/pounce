@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 
 import { expect, test } from "vitest";
 
@@ -7,9 +8,11 @@ import { actor, playable, type BirdAction, type BirdState } from "../src/birdwat
 import { birdwatch } from "../src/games/birdwatch";
 import { parseClientMessage } from "../src/protocol";
 import { RoomCore } from "../src/room/core";
+import { createTables, listTables, upsertTable } from "../src/room/tables";
 import { createRng } from "../src/rules/rng";
 
 import { bell, fish, mouse } from "./birdwatch-helpers";
+import { storage } from "./sqlite-storage";
 
 import type { BirdView } from "../src/birdwatch/view";
 import type { ClientMessage, Person, ServerMessage } from "../src/protocol";
@@ -269,4 +272,28 @@ test("Birdwatch's client samples match the committed file, and the room's parser
     const parsed = parseClientMessage(JSON.stringify(message), birdwatch.parseAction, birdwatch.parseAim, birdwatch.parseOptions);
     expect(parsed, name).toEqual(message);
   }
+});
+
+/**
+ * `GET /v1/devices/me/tables` as a 1.3 app hears it, read back through the list's own SQL: a
+ * Birdwatch table names its rule set in `options`, and a tile game table beside it has none. The
+ * Cat Tower list 1.0 decodes is `fixtures/http/tables.json`, pinned and untouched.
+ */
+test("fixtures/http/birdwatch-tables.json is what the tables list's own code builds", () => {
+  const sql = storage(new DatabaseSync(":memory:"));
+  createTables(sql);
+  const day = (h: number) => Date.UTC(2026, 10, 25, h);
+  const seats = [
+    { kind: "human" as const, person: people[0] as Person, yours: true as const },
+    { kind: "bot" as const },
+    { kind: "human" as const, person: people[1] as Person },
+    { kind: "bot" as const },
+  ];
+  upsertTable(sql, { code: "BCDFG", name: "Window Seat", status: "playing", yourTurn: true, updatedAt: day(18), seats, movedAt: day(17), game: "birdwatch", options: { rules: "tucker" } });
+  upsertTable(sql, { code: "GH2VD", name: "Porch", status: "lobby", yourTurn: false, updatedAt: day(12), seats, game: "birdwatch", options: { rules: "official" } });
+  upsertTable(sql, { code: "KLMNP", name: "Taco Night", status: "playing", yourTurn: false, updatedAt: day(9), seats: seats.slice(0, 2), game: "tiles" });
+  const path = new URL("../fixtures/http/birdwatch-tables.json", import.meta.url);
+  const text = JSON.stringify({ tables: listTables(sql) }, null, 2) + "\n";
+  if (write) writeFileSync(path, text);
+  expect(readFileSync(path, "utf8")).toBe(text);
 });

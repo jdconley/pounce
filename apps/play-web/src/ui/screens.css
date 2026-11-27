@@ -346,6 +346,15 @@
   font: 800 0.9rem var(--round);
 }
 
+/* A Birdwatch table's rule set, right under its name: quieter than the name, never cut. */
+.table-card .rules {
+  max-width: 100%;
+  font: 800 0.8rem var(--round);
+  line-height: 1.15;
+  opacity: 0.9;
+  overflow-wrap: anywhere;
+}
+
 .table-card .code {
   font: 900 0.85rem var(--round);
   letter-spacing: 0.18em;

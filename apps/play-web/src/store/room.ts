@@ -227,7 +227,14 @@ function foldCatTower(g: NonNullable<RoomView["game"]>, e: GameEvent): NonNullab
       handCounts[e.seat] = Math.max(0, (handCounts[e.seat] ?? 0) - 1);
       const hands = { ...g.hands };
       if (hands[e.seat]) hands[e.seat] = hands[e.seat].filter((c) => c !== e.card);
-      return { ...g, handCounts, hands, discardTop: e.card, discardCount: g.discardCount + 1 };
+      const pendingSkip = [...g.pendingSkip];
+      if (e.skipTarget !== undefined) pendingSkip[e.skipTarget] = true;
+      return { ...g, handCounts, hands, discardTop: e.card, discardCount: g.discardCount + 1, pendingSkip };
+    }
+    case "skipped": {
+      const pendingSkip = [...g.pendingSkip];
+      pendingSkip[e.seat] = false;
+      return { ...g, pendingSkip };
     }
     case "laidDown": {
       const n = e.groups.reduce((sum, grp) => sum + grp.cards.length, 0);

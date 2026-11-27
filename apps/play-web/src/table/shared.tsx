@@ -9,7 +9,7 @@ import { art } from "../lib/art";
 import { buzz } from "../lib/haptics";
 import { reducedMotion } from "../lib/settings";
 import { play } from "../lib/sound";
-import { Cat, learnTip } from "../ui/common";
+import { Button, Cat, Icon, learnTip, Sheet } from "../ui/common";
 
 import { CardBack, CardFace } from "./faces";
 import { MOVE, transformOf, type Pose } from "./motion";
@@ -60,6 +60,25 @@ export function Flights(props: { flights: Flight[]; cw: number; ch: number; onDo
 }
 
 const HOLD_MS = 650;
+
+/**
+ * A discard with the level made in the trays: lay it down first (the obvious choice, focused, so
+ * Enter takes it), or discard anyway. Esc or a tap outside goes back to the turn.
+ */
+export function LayDownFirst(props: { onLay: () => void; onDiscard: () => void; onClose: () => void }) {
+  return (
+    <Sheet title="Lay down first?" onClose={props.onClose}>
+      <div class="sheet-actions">
+        <Button wide variant="ok" id="lay-first" onClick={props.onLay}>
+          <Icon name="icon-paw-menu" size={28} /> Lay down
+        </Button>
+        <Button wide variant="violet" id="discard-anyway" onClick={props.onDiscard}>
+          Discard anyway
+        </Button>
+      </div>
+    </Sheet>
+  );
+}
 
 /**
  * Pass and play's curtain (PassCurtainView.swift): the next person's hand stays hidden until

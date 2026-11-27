@@ -37,6 +37,8 @@ export type TableEntry = {
   updatedAt: number;
   game?: string;
   seats?: { kind: string; person?: { id: string; name: string; cat: number }; yours?: boolean }[];
+  /** What the lobby chose, for a game that has options: Birdwatch's rule set. */
+  options?: { rules?: string };
 };
 
 export type FunnelReport = { reached: Record<string, number>; source?: string; locale?: string };
