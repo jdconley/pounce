@@ -117,7 +117,7 @@ export const DISH_SINCE = "1.2";
 export const BIRDWATCH_SINCE = "1.3";
 
 /** The first app version that can play each game, for games newer than the first release. */
-export const GAME_SINCE: Readonly<Record<string, string>> = { tiles: "1.1", birdwatch: BIRDWATCH_SINCE, [DISH_GAME]: DISH_SINCE };
+export const GAME_SINCE: Readonly<Record<string, string>> = { tiles: "1.1", birdwatch: BIRDWATCH_SINCE, tumble: "1.4", [DISH_GAME]: DISH_SINCE };
 
 /**
  * Whether the App Store's current version is at least `since`. Unknown counts as no: a page
