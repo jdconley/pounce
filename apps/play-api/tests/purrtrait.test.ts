@@ -75,8 +75,9 @@ async function sit(mf: Miniflare, code: string, screen: Client, device: Device, 
   return c;
 }
 
-const refusal = async (res: Awaited<ReturnType<typeof upgrade>>) => ({ status: res.status, body: (await res.json()) as unknown });
-const NOT_NEAR = { status: 403, body: { error: "not_near" } };
+/** A refused upgrade: its status, its body, and the reason header an app reads, since it can't read the body. */
+const refusal = async (res: Awaited<ReturnType<typeof upgrade>>) => ({ status: res.status, body: (await res.json()) as unknown, why: res.headers.get("x-pounce-error") });
+const NOT_NEAR = { status: 403, body: { error: "not_near" }, why: "not_near" };
 
 /** A browser's socket, offered as the web player offers it: its close code once it closes. */
 async function browser(mf: Miniflare, code: string, device: Device, query: string) {
@@ -131,6 +132,18 @@ describe("joining from the TV's code (design §5.2)", { timeout: 30_000 }, () =>
     const ok = await browser(mf, code, other, `near=${nearOf(screen).key}`);
     const snap = await eventually(() => ok.messages[0], Boolean);
     expect(snap?.room.gameId).toBe("purrtrait");
+  });
+
+  test("the room itself refuses a stranger without a key with not_near in a header too", async () => {
+    const mf = await start();
+    const [tv, stranger] = [await mint(mf), await mint(mf)];
+    const { code } = await tvTable(mf, tv);
+    // Straight to the room's Durable Object, as the Worker forwards an upgrade it let through.
+    const rooms = await mf.getDurableObjectNamespace("ROOMS");
+    const res = await rooms.get(rooms.idFromName(code)).fetch(`${BASE}/v1/rooms/${code}/ws`, {
+      headers: { upgrade: "websocket", "x-play-device": stranger.deviceId, ...PURR },
+    });
+    expect({ status: res.status, body: (await res.json()) as unknown, why: res.headers.get("x-pounce-error") }).toEqual(NOT_NEAR);
   });
 
   test("the typed 8-char code works inside 60 s, in any case", async () => {
@@ -238,6 +251,24 @@ describe("joining from the TV's code (design §5.2)", { timeout: 30_000 }, () =>
   });
 });
 
+describe("the turn clock at a Purrtrait table", { timeout: 30_000 }, () => {
+  test("the first snapshot after Start has the pick's clock running, with the TV connected", async () => {
+    const mf = await start();
+    const [tv, a, b] = [await mint(mf), await mint(mf), await mint(mf)];
+    const { code, screen } = await tvTable(mf, tv);
+    const pa = await sit(mf, code, screen, a, 0, newPerson("Alice", 1));
+    await sit(mf, code, screen, b, 1, newPerson("Bo", 2));
+    pa.send({ t: "start" });
+    for (const c of [pa, screen]) {
+      const first = await c.find<Snapshot>((m) => m.t === "snapshot" && m.room.purrtrait?.phase === "choosing");
+      const view = first.room.purrtrait as unknown as { remainingMs: number | null; paused: boolean };
+      expect(view.paused).toBe(false);
+      expect(view.remainingMs).toBeGreaterThan(9_000);
+      expect(view.remainingMs).toBeLessThanOrEqual(10_000);
+    }
+  });
+});
+
 describe("Play again at a Purrtrait table", { timeout: 30_000 }, () => {
   test("both phones follow with no key, and the TV follows as the screen", async () => {
     const mf = await start();
@@ -270,7 +301,7 @@ describe("Play again at a Purrtrait table", { timeout: 30_000 }, () => {
 });
 
 describe("the host removes a player (design §10.2)", { timeout: 30_000 }, () => {
-  const REMOVED = { status: 403, body: { error: "removed" } };
+  const REMOVED = { status: 403, body: { error: "removed" }, why: "removed" };
   const closing = (c: Client) => new Promise<number>((resolve) => c.ws.addEventListener("close", (e) => resolve(e.code)));
 
   test("remove in the lobby opens the seat and the device is refused after, even with a fresh key", async () => {

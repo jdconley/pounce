@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 
 import { servedAt, storeKnown } from "../app/live";
-import { gameUnsupported } from "../app/status";
+import { gameUnsupported, refused } from "../app/status";
 import { APP_HEADER, parseApp } from "../app/version";
 import { devSpeed, linkOn, nudgeOn, tvOn } from "../env";
 import { reached } from "../funnel/funnel";
@@ -69,9 +69,6 @@ const STREAK_ATTEMPTS = 2;
 const TUMBLE_TICK_MS = 100;
 
 const cryptoRng = (): number => (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 2 ** 32;
-
-/** A refused upgrade: the status and `{ "error" }`, which a browser hears as close code 4000 + status. */
-const refuse = (status: number, error: string): Response => new Response(JSON.stringify({ error }), { status, headers: { "content-type": "application/json" } });
 
 /**
  * One instance per room code. Holds the room's state in SQLite, the devices'
@@ -227,18 +224,18 @@ export class GameRoom extends DurableObject<Env> {
     // A device the host of a same-room table removed stays out, whatever key it brings, and so
     // does a removed player on another device (design §10.2).
     const players = parsePlayers(request.headers.get(PLAYER_HEADER));
-    if (this.core.turnedAway(deviceId, players)) return refuse(403, "removed");
+    if (this.core.turnedAway(deviceId, players)) return refused(403, "removed");
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
     // A device that sits or hosts is no screen, and only a device the room lists is one: it made
     // the table, a phone linked it, or it followed Play again. Asked before the socket exists, so
     // each refusal is a plain status.
     const screen = tvOn(this.env) && request.headers.get(ROLE_HEADER) === "screen";
-    if (screen && !this.core.mayScreen(deviceId)) return refuse(409, "seated");
-    if (screen && !this.core.isScreen(deviceId)) return refuse(403, "not_screen");
+    if (screen && !this.core.mayScreen(deviceId)) return refused(409, "seated");
+    if (screen && !this.core.isScreen(deviceId)) return refused(403, "not_screen");
     // A same-room table (Purrtrait) lets a stranger in only with the TV's near key. The Worker's
     // guard asked the same and counted a wrong one; asked again here, where the socket is made.
-    if (!screen && this.core.knows(deviceId, nearParam(request), false) === "not_near") return refuse(403, "not_near");
+    if (!screen && this.core.knows(deviceId, nearParam(request), false) === "not_near") return refused(403, "not_near");
     // A game that changes for kittens (Purrtrait's two Easy words) needs the device's age band
     // first. A lookup that fails keeps what the room already knew: a kitten stays one.
     const kitten =
@@ -250,7 +247,7 @@ export class GameRoom extends DurableObject<Env> {
         : false;
     if (!this.core) return new Response(null, { status: 404 });
     // The host may have removed it while the age band was looked up.
-    if (this.core.turnedAway(deviceId, players)) return refuse(403, "removed");
+    if (this.core.turnedAway(deviceId, players)) return refused(403, "removed");
     if (kitten !== null) this.core.setKitten(deviceId, kitten);
     this.ctx.acceptWebSocket(server, [deviceId]);
     // `socket`: which of the device's sockets this is (a second tab, a reconnect), for Toy Tumble's one writer per box.

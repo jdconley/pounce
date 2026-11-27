@@ -55,6 +55,21 @@ function rebuild(r: Room): Room {
 }
 
 describe("the turn clock", () => {
+  it("the first choosing snapshot after Start carries the running clock", () => {
+    const state = RoomCore.create<PurrState>("BCDFG", "a", clock, undefined, undefined, "purrtrait");
+    const r = new RoomCore<PurrState>(state, () => clock, rng, undefined, 1, { games: ["cat-tower", "purrtrait"], tv: true, streaks: true });
+    r.addScreen("tv");
+    for (const d of ["tv", "a", "b"]) r.connect(d);
+    r.handle("a", { t: "claim", seat: 0, person: person(1) });
+    r.handle("b", { t: "claim", seat: 1, person: person(2) });
+    for (let seat = 2; seat < state.seats.length; seat++) r.handle("a", { t: "configure", seat, kind: "closed" });
+    const out = r.handle("a", { t: "start" });
+    const firsts = ["tv", "a", "b"].map((d) => out.find((o) => o.to === d && o.message.t === "snapshot")?.message);
+    for (const snap of firsts) {
+      expect((snap as { room: { purrtrait: PurrView } }).room.purrtrait).toMatchObject({ phase: "choosing", remainingMs: 10_000, paused: false });
+    }
+  });
+
   it("choosing times out to the easy word", () => {
     const r = started();
     expect(game(r).phase).toBe("choosing");

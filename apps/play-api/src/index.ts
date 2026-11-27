@@ -1,5 +1,5 @@
 import { servedAt, storeKnown } from "./app/live";
-import { appStatus, refusalFor, RETIRED_SNAPSHOT, UPDATE_HEADER, UPDATE_REQUIRED, type UpdateRequired } from "./app/status";
+import { appStatus, refusalFor, refused, RETIRED_SNAPSHOT, UPDATE_HEADER, UPDATE_REQUIRED, type UpdateRequired } from "./app/status";
 import { APP_HEADER, parseApp } from "./app/version";
 import { issueDeviceToken, verifyDeviceToken } from "./auth";
 import { APPLE_ROOTS } from "./consent/appstore";
@@ -295,7 +295,8 @@ async function openSocket(request: Request, env: Env, deviceId: string, code: st
   }
   if (!guard.exists) return notFound();
   if (screen && !tvOn(env)) return notFound();
-  if (guard.notNear) return json(403, { error: "not_near" });
+  // In a header too: an app can't read a refused upgrade's body.
+  if (guard.notNear) return refused(403, "not_near");
   // A TV is no player: it is never counted as an active device.
   if (!screen) later(active(env, deviceId, Date.now()).catch(() => undefined));
   // The room trusts these headers, so client-supplied ones must never reach it.

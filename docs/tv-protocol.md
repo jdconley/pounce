@@ -27,6 +27,7 @@ seats gets: no hand, no rack, no drawn card or tile.
 - **Refused:**
   - 409 `{ "error": "seated" }` (close code 4409 for a browser) when the device holds a seat in that room or hosts it.
   - 403 `{ "error": "not_screen" }` (close code 4403 for a browser) when the room doesn't list the device as a screen. A TV that hears it, or 404, forgets the room it kept and goes home.
+  - Each refusal has the same code in the header `X-Pounce-Error` too, for an app, which can't read a refused upgrade's body.
   - Use a device of its own for the TV. The web TV page keeps its credential under `pounce.tv.device`.
 - **What a screen may send.** Only `ping`, `presence` and `link`. Every other message is answered `{ "t": "error", "code": "not_allowed" }`.
 - **Membership.**
@@ -209,7 +210,8 @@ and `purrtrait-client-messages.json`. Only a Purrtrait room speaks any of this. 
   any case. A member reconnects with no key: a seat's device, the host, the TV, a device that
   has been at the table, and Play again's followers.
 - **Refused:** 403 `{ "error": "not_near" }` (close 4403 for a browser) for a device that isn't a
-  member and brings no key, a stale key, the plain room code or a wrong code.
+  member and brings no key, a stale key, the plain room code or a wrong code. The answer has
+  `X-Pounce-Error: not_near` too, since an app can't read a refused upgrade's body.
   - Each is a wrong room-code guess against the device (`DEVICE_JOIN_RULE`, 5 an hour free) and
     its address (`IP_JOIN_RULE`, 20 an hour free; an IPv6 address counts by its /64). Past that
     both back off, and a locked-out device or address gets 429 `too_many_attempts` with
@@ -299,8 +301,8 @@ Server to client, with no `seq`, never in a snapshot and never stored:
   device that still holds another seat stays; only the removed person is refused.
 - **A removed device gets only a close:** its sockets close at once with 4403, reason `removed`,
   with no error, snapshot or event first. After that its socket upgrade is 403
-  `{ "error": "removed" }` (4403 for a browser), with or without a key, and never counted as a
-  guess. The removed player on another device is refused the same way, and a `claim` as them
+  `{ "error": "removed" }` (4403 for a browser) with `X-Pounce-Error: removed`, with or without a
+  key, and never counted as a guess. The removed player on another device is refused the same way, and a `claim` as them
   answers `removed`.
 - When the host's seat leaves, the host role passes to the next seat still in.
 - Play again keeps the host, whoever taps it, while a seat the host holds is dealt again.

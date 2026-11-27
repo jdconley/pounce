@@ -1268,9 +1268,12 @@ export class RoomCore<S = CatTowerState> {
     state.seats = playing.map((p) => p.seat);
     state.gameState = gameState;
     state.status = "playing";
-    const out = this.changed();
+    state.seq += 1;
+    this.touch();
     state.turnSeq = state.seq;
+    // Timers first, so the deal's own snapshot carries the first turn's clock.
     this.afterGameChange();
+    const out = this.snapshots();
     // Toy Tumble counts down at once when everyone is here (Start), or once they are (Play again).
     return [...out, ...this.tumbleAdvance()];
   }
