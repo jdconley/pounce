@@ -366,6 +366,48 @@ final class TumbleArt {
     }
 }
 
+/// Toy Tumble's House Cat levels as two pills, "Cats: Easy" and "Cats: Quick" (the lobby's).
+struct TumbleCatsPills: View {
+    @Binding var cats: TumbleCats
+    var enabled = true
+    var onPick: (TumbleCats) -> Void = { _ in }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(TumbleCats.allCases, id: \.self) { option in
+                let on = option == cats
+                Button {
+                    guard enabled, !on else { return }
+                    Haptics.shared.tick()
+                    withAnimation(.spring(duration: 0.3).paced) { cats = option }
+                    onPick(option)
+                } label: {
+                    Text(TumbleWords.catsLevel(option))
+                        .font(.system(.headline, design: .rounded, weight: .black))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 9)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            Capsule().fill(on ? Palette.lime.mix(with: Palette.ink, by: 0.15) : Palette.ink.opacity(0.55))
+                                .overlay(Capsule().strokeBorder(on ? Palette.ink : Palette.lime, lineWidth: 3))
+                                .shadow(color: Palette.ink.opacity(on ? 0.6 : 0), radius: 0, x: 0, y: 3))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .allowsHitTesting(enabled)
+                .accessibilityAddTraits(on ? .isSelected : [])
+                .accessibilityIdentifier("tumble.cats.\(option.rawValue)")
+            }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("tumble.cats")
+    }
+}
+
 /// Toy Tumble's words (spec §5.8): the trick names and the few short labels.
 enum TumbleWords {
     static func trick(_ t: TumbleTrick) -> String {

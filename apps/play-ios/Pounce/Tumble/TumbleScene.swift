@@ -24,6 +24,10 @@ final class TumbleScene: SKScene {
     var onTipSpots: ([String: CGRect]) -> Void = { _ in }
     var onTipUsed: (String) -> Void = { _ in }
     var onTipEvent: (TipEvent) -> Void = { _ in }
+    /// The game is over (the TV's game over screen follows).
+    var onGameOver: ([Seat]) -> Void = { _ in }
+    private var reportedOver = false
+    private var seenSeq = -2
 
     var safeInsets: UIEdgeInsets = .zero {
         didSet { if safeInsets != oldValue { needsLayout = true } }
@@ -57,6 +61,7 @@ final class TumbleScene: SKScene {
     private var lastCount: Int?
     private var heldShown: [TumbleTrick] = []
     var accessibilityVersion = 0
+    let accessibilityPool = TumbleAccessibilityPool()
     #if DEBUG
     var autoplay: TumbleAutoplay?
     #endif
@@ -115,6 +120,16 @@ final class TumbleScene: SKScene {
         if autoplay == nil { autoplay = TumbleAutoplay.start(self) }
         #endif
         needsLayout = true
+        // The textures are drawn off the main thread; until they come the boxes wait, then are made again.
+        if !TumbleArt.shared.ready {
+            Task { [weak self] in
+                await TumbleArt.shared.prewarm()
+                guard let self else { return }
+                for node in self.boxNodes.values { node.removeFromParent() }
+                self.boxNodes.removeAll()
+                self.needsLayout = true
+            }
+        }
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
@@ -138,6 +153,15 @@ final class TumbleScene: SKScene {
     override func update(_ currentTime: TimeInterval) {
         let work = FrameWork("tumble.frame"); defer { work.end() }
         let now = TumbleTable.now()
+        // A snapshot the table hasn't seen (its owner may also hand it over; updating twice is a no-op).
+        if store.lastSeq != seenSeq, let room = store.room {
+            seenSeq = store.lastSeq
+            table.update(room: room, now: now)
+            if !reportedOver, room.tumble?.status == .over || room.status == .over {
+                reportedOver = true
+                onGameOver(room.tumble?.winner.map { [$0] } ?? [])
+            }
+        }
         table.step(now: now)
         #if DEBUG
         autoplay?.tick(now)

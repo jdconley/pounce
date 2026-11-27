@@ -40,7 +40,6 @@ struct TumbleStage: View {
                 TumbleTableView(scene: scene)
                     .ignoresSafeArea()
                     .overlay { TipSpots(spots: tipSpots).ignoresSafeArea() }
-                    .accessibilityIdentifier("tumble.table")
             } else {
                 RoomBackground()
             }

@@ -65,6 +65,12 @@ struct LobbyView: View {
                         .fixedSize()
                         .accessibilityIdentifier("tv.lobby.rules")
                 }
+                // Toy Tumble: the House Cats' level the host picked.
+                if room.isTumble {
+                    OutlinedText(TumbleWords.catsLevel(room.tumbleCats), size: 36, fill: Palette.lime, width: 3)
+                        .fixedSize()
+                        .accessibilityIdentifier("tv.lobby.cats")
+                }
             }
         }
         .accessibilityElement(children: .ignore)

@@ -73,16 +73,19 @@ final class TumbleSKView: SKView {
 
 extension TumbleScene {
     /// VoiceOver and the UI tests: your box, each other box, and the tray's tricks.
+    /// One element per place in the list, kept between queries: VoiceOver and the UI tests read
+    /// an element's attributes after the query returns, so it must outlive it.
+    private func element(in view: UIView) -> UIAccessibilityElement {
+        accessibilityPool.next(in: view)
+    }
+
     func accessibilityElements(in view: UIView) -> [UIAccessibilityElement] {
+        accessibilityPool.reset()
         guard let layout else { return [] }
-        func frame(_ r: CGRect) -> CGRect {
-            let flipped = CGRect(x: r.minX, y: size.height - r.maxY, width: r.width, height: r.height)
-            return view.convert(flipped, to: nil)
-        }
         var out: [UIAccessibilityElement] = []
         let room = store.room
         for (seat, node) in boxNodes.sorted(by: { $0.key < $1.key }) {
-            let e = UIAccessibilityElement(accessibilityContainer: view)
+            let e = element(in: view)
             let name = room.map { SeatInfo.name($0, seat) } ?? ""
             let box = table.box(seat)
             let height = box.map { Tumble.highest($0) + 1 } ?? 0
@@ -98,12 +101,12 @@ extension TumbleScene {
                 e.accessibilityValue = table.isOut(seat) ? TumbleWords.out : String(localized: "\(height) rows high", comment: "Toy Tumble VoiceOver: how high a box's stack is")
             }
             e.accessibilityTraits = lifted != nil ? .button : []
-            e.accessibilityFrameInContainerSpace = view.convert(CGRect(x: node.rect.minX, y: size.height - node.rect.maxY, width: node.rect.width, height: node.rect.height), to: view)
+            e.accessibilityFrameInContainerSpace = CGRect(x: node.rect.minX, y: size.height - node.rect.maxY, width: node.rect.width, height: node.rect.height)
             out.append(e)
         }
         let held = table.local?.box.held ?? []
         for (i, r) in layout.slots.enumerated() where i < held.count {
-            let e = UIAccessibilityElement(accessibilityContainer: view)
+            let e = element(in: view)
             e.accessibilityIdentifier = "tumble.trick.\(i)"
             e.accessibilityLabel = TumbleWords.trick(held[i])
             e.accessibilityTraits = lifted == i ? [.button, .selected] : .button
@@ -111,7 +114,7 @@ extension TumbleScene {
             out.append(e)
         }
         if !menuButton.isHidden {
-            let e = UIAccessibilityElement(accessibilityContainer: view)
+            let e = element(in: view)
             e.accessibilityIdentifier = "tumble.menu"
             e.accessibilityLabel = String(localized: "Menu", comment: "Toy Tumble VoiceOver: the paw menu")
             e.accessibilityTraits = .button
@@ -119,7 +122,27 @@ extension TumbleScene {
             e.accessibilityFrameInContainerSpace = CGRect(x: m.minX, y: size.height - m.maxY, width: m.width, height: m.height)
             out.append(e)
         }
-        _ = frame
         return out
+    }
+}
+
+/// The scene's accessibility elements, reused query to query so they stay alive.
+@MainActor
+final class TumbleAccessibilityPool {
+    private var elements: [UIAccessibilityElement] = []
+    private var used = 0
+
+    func reset() { used = 0 }
+
+    func next(in view: UIView) -> UIAccessibilityElement {
+        defer { used += 1 }
+        if used < elements.count, (elements[used].accessibilityContainer as? UIView) === view {
+            let e = elements[used]
+            e.accessibilityValue = nil
+            return e
+        }
+        let e = UIAccessibilityElement(accessibilityContainer: view)
+        if used < elements.count { elements[used] = e } else { elements.append(e) }
+        return e
     }
 }

@@ -33,6 +33,7 @@ enum TVDemo: Equatable {
         case "tv-hit": return .table(.cattower, seats: seats ?? 6)
         case "tv-tiles": return .table(.tiles, seats: seats ?? 4)
         case "tv-birdwatch": return .table(.birdwatch, seats: seats ?? 4)
+        case "tv-tumble": return .table(.tumble, seats: seats ?? 6)
         case "tv-shell": return .shell
         case "tv-over": return .over(seats: seats ?? 4)
         case "tv-board": return .board
@@ -498,8 +499,20 @@ struct TVDemoTableView: View {
 
     private func start() {
         guard table == nil else { return }
-        let room = TVDemo.room(tiles: game == .tiles, birdwatch: game == .birdwatch, seats: seats, code: DemoFixtures.code)
-        let next = TVRoom(code: room.code, socket: { _ in TVDemoSocket(room: room, lobby: false) }, watchesNetwork: false)
+        let next: TVRoom
+        if game == .tumble {
+            // Every seat a House Cat box, playing live on the demo room (spec §5.6).
+            var options = TumbleDemoRoom.Options()
+            options.seats = min(max(seats, 2), 6)
+            options.screen = true
+            options.think = 600...1100
+            options.stack = 3
+            let made = options
+            next = TVRoom(code: "TUMBLE", socket: { _ in TumbleDemoSocket(options: made, tv: true) }, watchesNetwork: false)
+        } else {
+            let room = TVDemo.room(tiles: game == .tiles, birdwatch: game == .birdwatch, seats: seats, code: DemoFixtures.code)
+            next = TVRoom(code: room.code, socket: { _ in TVDemoSocket(room: room, lobby: false) }, watchesNetwork: false)
+        }
         next.onChange = { table in
             if table.store.phase == .playing || table.store.phase == .over { table.openTable() }
         }
