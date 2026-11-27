@@ -110,7 +110,7 @@ final class FrameRateTests: XCTestCase {
             Thread.sleep(forTimeInterval: seconds)
         }
         let host = Host.framesUnreliable()
-        guard let after = watchdog(app) else { return XCTFail("the watchdog went away", file: file, line: line) }
+        guard let after = watchdog(app) else { return XCTFail("the watchdog went away (\(watchdogReadError))", file: file, line: line) }
         let window = after - before
         let report = window.report(name) + String(format: " | host load %.2f per core", host.load)
         print(report)

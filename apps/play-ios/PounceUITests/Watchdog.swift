@@ -177,6 +177,16 @@ struct Watchdog {
         return out
     }
 
+    /// Table views that came on screen, times one left its window, and times the app left the
+    /// foreground: a window short of frames says which (`MainThreadWatchdog.views`).
+    var views = 0
+    var offs = 0
+    var inactive = 0
+    /// The touches the app's windows were handed: began, moved, ended, cancelled.
+    var windowTouches = "-"
+    var touchView = "-"
+    var touchRecognizers = "-"
+
     var link = Frames()
     var tableFrames = Frames()
 
@@ -202,6 +212,12 @@ struct Watchdog {
             case "speed": speedMs = Double(pair[1]) ?? 0
             case "apphangs": appHangs = Int(pair[1]) ?? 0
             case "apphangmax": appHangMaxMs = Double(pair[1]) ?? 0
+            case "views": views = Int(pair[1]) ?? 0
+            case "offs": offs = Int(pair[1]) ?? 0
+            case "inactive": inactive = Int(pair[1]) ?? 0
+            case "wtouch": windowTouches = pair[1]
+            case "wview": touchView = pair[1]
+            case "wgr": touchRecognizers = pair[1]
             case "workh":
                 for entry in pair[1].split(separator: ",") {
                     let kv = entry.split(separator: ":").compactMap { Int($0) }
@@ -239,6 +255,12 @@ struct Watchdog {
             let left = n - (b.workHistogram[bucket] ?? 0)
             if left > 0 { out.workHistogram[bucket] = left }
         }
+        out.views = a.views - b.views
+        out.offs = a.offs - b.offs
+        out.inactive = a.inactive - b.inactive
+        out.windowTouches = a.windowTouches
+        out.touchView = a.touchView
+        out.touchRecognizers = a.touchRecognizers
         out.link = a.link - b.link
         out.tableFrames = a.tableFrames - b.tableFrames
         return out
@@ -249,14 +271,46 @@ struct Watchdog {
         String(format: "FRAMES %@ screen=%dfps table=%dfps tpc=%d | table %@ | main %@ | app work worst %.1fms, over 8.3ms=%d, accessibility rebuild worst %.1fms, near a screen read worst %.1fms | hangs=%d (worst %.0fms) ax-or-outside-hangs=%d | speed %.2fms, %.2fx the reference | app work p95 %.1fms p99 %.1fms, app hangs %d (worst %.0fms)",
                name, screen, table, checkerLoaded ? 1 : 0, tableFrames.line, link.line, workMaxMs, workOver, readWorkMs, readFrameWorkMs, hangs, hangMaxMs, otherHangs, speedMs, slowdown,
                workPercentile(0.95), workPercentile(0.99), appHangs, appHangMaxMs)
+            + String(format: " | table views +%d, off window %d, app inactive %d", views, offs, inactive)
     }
 }
 
 @MainActor
 extension XCTestCase {
     /// The app's watchdog now, or nil when no table is on screen (or the app runs without it).
+    /// The table's watchdog, read again for up to 3 s (scaled) when a read comes back empty. A read
+    /// is an accessibility snapshot, which the app's main thread has to answer; on a starved CI
+    /// runner the app can go unscheduled for seconds (a 6.3 s stall in one soak, none of it the
+    /// app's own work), the snapshot times out, and one empty read failed a frame gate that was
+    /// counting frames fine. The stall itself is still in the reading: hangs and slow frames are
+    /// counted whether or not a read was waiting on them.
     func watchdog(_ app: XCUIApplication) -> Watchdog? {
-        Watchdog(value(el(app, "watchdog")))
+        let deadline = Date().addingTimeInterval(Live.t(3))
+        while true {
+            var raw: String?
+            do {
+                raw = try el(app, "watchdog").snapshot().value as? String
+                if raw == nil { WatchdogRead.lastError = "no value" }
+            } catch {
+                WatchdogRead.lastError = "\(error)".replacingOccurrences(of: "\n", with: " ")
+            }
+            if let reading = Watchdog(raw) { return reading }
+            if raw == "off" { return nil }
+            if raw != nil { WatchdogRead.lastError = "unreadable: \(raw!.prefix(80))" }
+            guard Date() < deadline else { return nil }
+            Thread.sleep(forTimeInterval: Live.poll(0.5))
+        }
+    }
+
+    /// Why the last watchdog read came back empty, for a failure message.
+    var watchdogReadError: String { WatchdogRead.lastError }
+
+    /// Where a lost touch went, for a failed drag or tap's message: the touches the app's windows
+    /// were handed (`began,moved,ended,cancelled`), the table views that came on screen, times one
+    /// left its window, and times the app left the foreground.
+    func touchReport(_ app: XCUIApplication) -> String {
+        guard let w = watchdog(app) else { return "window touches -" }
+        return "window touches \(w.windowTouches), table views \(w.views), off window \(w.offs), app inactive \(w.inactive), last touch on \(w.touchView) via \(w.touchRecognizers)"
     }
 
     /// Waits for the table's watchdog to report gameplay frames (the table has been up for its
@@ -266,11 +320,12 @@ extension XCTestCase {
         var reading: Watchdog?
         // The settle second, then a frame or two counted.
         _ = until(timeout) {
-            reading = self.watchdog(app)
+            // An empty read doesn't undo a good one.
+            if let now = self.watchdog(app) { reading = now }
             return (reading?.link.count ?? 0) + (reading?.link.queried ?? 0) > 0
         }
         guard let reading else {
-            XCTFail("the watchdog reads \(value(el(app, "watchdog")) ?? "nothing")", file: file, line: line)
+            XCTFail("no watchdog reading (\(watchdogReadError)); now it reads \(value(el(app, "watchdog")) ?? "nothing")", file: file, line: line)
             return Watchdog("screen=0 table=0 | link n=0 | table n=0")!
         }
         return reading
@@ -311,4 +366,9 @@ enum Host {
         }
         return Int(count)
     }
+}
+
+/// The last failed watchdog read's error (`watchdogReadError`).
+@MainActor enum WatchdogRead {
+    static var lastError = "-"
 }

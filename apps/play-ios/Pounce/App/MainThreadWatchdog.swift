@@ -104,6 +104,22 @@ final class MainThreadWatchdog {
     /// A SwiftUI play screen with no table (the Daily Dish, a daily puzzle): when it came up.
     private var screenSince: CFTimeInterval?
 
+    /// Why a test's touch or a gate's frames went missing: table views that came on screen
+    /// (`views`, one per table unless SwiftUI rehosted it), times a table's view left its window
+    /// (`offs`), times the app left the foreground (`inactive`), and the touches the app's windows
+    /// were handed (`wtouch`: began, moved, ended, cancelled), whatever view they went on to.
+    private(set) var views = 0
+    private(set) var offs = 0
+    private(set) var inactive = 0
+    fileprivate(set) var windowTouches = (began: 0, moved: 0, ended: 0, cancelled: 0)
+    /// The latest touch's view and the gesture recognizers it was handed to (`wgr`): each one's
+    /// class, its state now and whether it holds the view's touch-ends until it decides. A touch
+    /// the window saw end but the table didn't was held or taken by one of these.
+    fileprivate weak var lastTouchView: UIView?
+    fileprivate var lastTouchRecognizers: [WeakRecognizer] = []
+    fileprivate struct WeakRecognizer { weak var value: UIGestureRecognizer? }
+    private var activeObserver: NSObjectProtocol?
+
     private let probe = Probe(id: "watchdog") { MainThreadWatchdog.shared?.summary() }
     private let framesProbe = Probe(id: "watchdog.frames") { MainThreadWatchdog.shared?.recentFrames() }
     private var windowObserver: NSObjectProtocol?
@@ -223,7 +239,10 @@ final class MainThreadWatchdog {
     /// A table's view went on screen (`window != nil`) or off it.
     func watch(_ view: SKView) {
         if view.window != nil {
-            if tableView !== view { tableSince = CACurrentMediaTime() }
+            if tableView !== view {
+                tableSince = CACurrentMediaTime()
+                views += 1
+            }
             tableView = view
             // The table's screen is known now (at launch there may be none yet, and the link
             // fell back to 60): judge the main thread's frames at that screen's top rate.
@@ -231,6 +250,7 @@ final class MainThreadWatchdog {
         } else if tableView === view {
             tableView = nil
             tableSince = nil
+            offs += 1
         }
         lastTableFrame = nil
     }
@@ -300,7 +320,32 @@ final class MainThreadWatchdog {
             framesOverWorkBudget, worstReadWorkMs, worstReadFrameWorkMs, speedMs)
             + String(format: " apphangs=%d apphangmax=%.1f workh=%@", appHangs, worstAppHangMs,
                      workHistogram.enumerated().filter { $0.element > 0 }.map { "\($0.offset):\($0.element)" }.joined(separator: ","))
-        return "\(head) | link \(link.summary) | table \(table.summary)"
+        let t = windowTouches
+        let seen = String(format: " views=%d offs=%d inactive=%d wtouch=%d,%d,%d,%d",
+                          views, offs, inactive, t.began, t.moved, t.ended, t.cancelled)
+        let held = lastTouchRecognizers.compactMap(\.value).map { g in
+            "\(Self.short(g))/\(Self.name(g.state))/\(g.delaysTouchesEnded ? 1 : 0)\(g.view === lastTouchView ? "" : "^")"
+        }
+        let viewName = lastTouchView.map { "\(Self.short($0))\($0.window == nil ? "/off" : "")" } ?? "-"
+        let grs = " wview=\(viewName) wgr=\(held.isEmpty ? "-" : held.joined(separator: ","))"
+        return "\(head)\(seen)\(grs) | link \(link.summary) | table \(table.summary)"
+    }
+
+    /// A class name without generic arguments, so it holds no spaces or commas.
+    private static func short(_ object: AnyObject) -> String {
+        String(String(describing: type(of: object)).prefix { $0 != "<" && $0 != " " && $0 != "," })
+    }
+
+    private static func name(_ state: UIGestureRecognizer.State) -> String {
+        switch state {
+        case .possible: "possible"
+        case .began: "began"
+        case .changed: "changed"
+        case .ended: "ended"
+        case .cancelled: "cancelled"
+        case .failed: "failed"
+        @unknown default: "other"
+        }
     }
 
     static func screenRate(_ window: UIWindow?) -> Int { UIScreen.topFrameRate(for: window) }
@@ -325,6 +370,12 @@ final class MainThreadWatchdog {
             forName: UIScene.didActivateNotification, object: nil, queue: .main
         ) { _ in
             MainActor.assumeIsolated { MainThreadWatchdog.shared?.matchScreenRate(nil) }
+        }
+
+        activeObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { MainThreadWatchdog.shared?.inactive += 1 }
         }
 
         // The thread wakes (first in line), and finishes each step (last in line, so a step's
@@ -459,6 +510,49 @@ final class MainThreadWatchdog {
         guard let window = windows.first(where: { $0.windowLevel == .normal && !$0.isHidden }) else { return }
         window.insertSubview(probe, at: 0)
         window.insertSubview(framesProbe, at: 0)
+        if window.gestureRecognizers?.contains(where: { $0 is TouchCensus }) != true {
+            window.addGestureRecognizer(TouchCensus())
+        }
+    }
+
+    /// Counts the touches a window is handed (`wtouch`), whichever view they go to, without
+    /// claiming, delaying or cancelling any.
+    private final class TouchCensus: UIGestureRecognizer, UIGestureRecognizerDelegate {
+        init() {
+            super.init(target: nil, action: nil)
+            cancelsTouchesInView = false
+            delaysTouchesBegan = false
+            delaysTouchesEnded = false
+            delegate = self
+        }
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            guard let watchdog = MainThreadWatchdog.shared else { return }
+            watchdog.windowTouches.began += touches.count
+            if let touch = touches.first {
+                watchdog.lastTouchView = touch.view
+                watchdog.lastTouchRecognizers = (touch.gestureRecognizers ?? [])
+                    .filter { $0 !== self }.map { WeakRecognizer(value: $0) }
+            }
+        }
+
+        override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+            MainThreadWatchdog.shared?.windowTouches.moved += touches.count
+        }
+
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+            MainThreadWatchdog.shared?.windowTouches.ended += touches.count
+            if numberOfTouches <= touches.count { state = .failed }
+        }
+
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+            MainThreadWatchdog.shared?.windowTouches.cancelled += touches.count
+            if numberOfTouches <= touches.count { state = .failed }
+        }
+
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            true
+        }
     }
 
     /// The `watchdog` and `watchdog.frames` elements: draw nothing, take no touches, read

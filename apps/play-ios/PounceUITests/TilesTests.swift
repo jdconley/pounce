@@ -29,7 +29,7 @@ final class TilesTests: XCTestCase {
     }
 
     private func wait(_ app: XCUIApplication, _ key: String, _ wanted: String, timeout: TimeInterval = 6, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(until(timeout) { self.probe(app)[key] == wanted }, "\(key) is \(probe(app)[key] ?? "nil"), wanted \(wanted): \(probe(app))", file: file, line: line)
+        XCTAssertTrue(until(timeout) { self.probe(app)[key] == wanted }, "\(key) is \(probe(app)[key] ?? "nil"), wanted \(wanted): \(probe(app)), \(touchReport(app))", file: file, line: line)
     }
 
     /// The first element whose id starts with `prefix` and whose label starts with `label`.
