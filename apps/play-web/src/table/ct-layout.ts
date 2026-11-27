@@ -22,6 +22,18 @@ export type CtInput = {
   laid: { seat: number; groups: number[] }[];
   /** A TV across the room: every seat in `opponents`, no hand or trays, sized for the couch. */
   tv?: boolean;
+  /** The reader's text size against the default (the root font over 16 px): 1.625 at the largest. */
+  text?: number;
+};
+
+/** A laid row's owner: their cat, and their name tag under it, in a column of its own at the row's left. */
+export type LaidOwner = {
+  /** The cat's circle (its centre and size); size 0 when the row has no room for one. */
+  avatar: { x: number; y: number; size: number };
+  /** The name tag's box: it is drawn this tall, and no wider (a long name ends in an ellipsis). Zero on a TV, whose seats carry the names. */
+  tag: Rect;
+  /** The name tag's font size, in px. */
+  font: number;
 };
 
 export type CtLayout = {
@@ -42,8 +54,10 @@ export type CtLayout = {
   hand: Pose[];
   handRect: Rect;
   trays: Rect[];
-  /** Laid groups: each seat's row, and each group's card poses and drop rectangle. */
-  laid: Map<number, { avatar: { x: number; y: number; size: number }; groups: { poses: Pose[]; rect: Rect }[] }>;
+  /** Each tray's count ("2/3"): its font, and the room kept for it at the tray's left, clear of the tray's cards. */
+  trayLabel: TrayLabel;
+  /** Laid groups: each seat's row (its owner, and each group's card poses and drop rectangle). */
+  laid: Map<number, LaidOwner & { groups: { poses: Pose[]; rect: Rect }[] }>;
   /** Where the action button sits (Lay down). */
   action: { x: number; y: number };
   /** The centre of the table, for effects. */
@@ -59,6 +73,30 @@ export type CtLayout = {
 };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+
+/**
+ * How far past its width a tower `w` wide reaches: its shelves' numbers (`.tower .shelf i`, 10 px
+ * out and a border) and a pickled cat's cucumber (a quarter of a tower and a bit).
+ */
+export const towerReach = (w: number) => Math.max(12, Math.ceil(w * 0.28));
+
+/** A tray's count: its font, and the width kept for it at the tray's left. */
+export type TrayLabel = { font: number; w: number };
+
+/**
+ * The room a tray's count needs: "9/9" in the label's font, which follows the reader's text size
+ * (`text`) and a controller's `unit`, never taller than the tray allows. Digits in the rounded black
+ * face are about 0.66 em, the slash 0.42, the outline 0.15.
+ */
+export function trayLabelOf(trayH: number, width: number, text = 1, unit = 1, size = 9): TrayLabel {
+  const font = Math.round(Math.min(clamp(width * 0.036, 13.6 * text, 16.8 * text) * unit, trayH * 0.42));
+  const digits = 2 * String(size).length;
+  return { font, w: Math.ceil(font * (0.66 * digits + 0.42 + 0.15)) };
+}
+
+/** The pad inside a tray's rim, and the gap between its count and its cards. */
+const TRAY_PAD = 10;
+const LABEL_GAP = 6;
 
 /** Poses for `n` cards fanned in a hand `width` wide, bottoms on `baseY`. */
 export function fan(n: number, centreX: number, baseY: number, cw: number, ch: number, maxWidth: number): Pose[] {
@@ -106,7 +144,7 @@ function shift(L: CtLayout, dx: number): CtLayout {
     hand: L.hand.map(p),
     handRect: p(L.handRect),
     trays: L.trays.map(p),
-    laid: new Map([...L.laid].map(([k, v]) => [k, { avatar: p(v.avatar), groups: v.groups.map((g) => ({ poses: g.poses.map(p), rect: p(g.rect) })) }])),
+    laid: new Map([...L.laid].map(([k, v]) => [k, { ...v, avatar: p(v.avatar), tag: p(v.tag), groups: v.groups.map((g) => ({ poses: g.poses.map(p), rect: p(g.rect) })) }])),
     action: p(L.action),
     centre: p(L.centre),
     banner: p(L.banner),
@@ -135,11 +173,11 @@ function layoutOn(input: CtInput): CtLayout {
   const avatar = Math.round(landscape ? clamp(usable / 8.5, 40, 84) : clamp(Math.min(W / 7.5, usable / 10), 46, 92));
   const bandH = avatar + 30;
   const small = landscape ? 0.6 : 0.56;
-  // Card height from the height there is: the piles and the hand (a card each), the trays, and
-  // in portrait up to two rows of laid groups (more rows squeeze themselves).
+  // Card height from the height there is: the piles and the hand (a card each), the trays, the
+  // cue's line, and in portrait up to two rows of laid groups (more rows squeeze themselves).
   const rows = landscape ? 0 : Math.min(input.laid.length, 2);
   const share = 2 + (input.trays > 0 ? small + 0.2 : 0) + rows * (small + 0.1);
-  const fromHeight = (usable - 8 - bandH - 76) / share / 1.406;
+  const fromHeight = (usable - 8 - bandH - 76 - 30) / share / 1.406;
   const cw = Math.round(clamp(Math.min(W / (landscape ? 12.5 : 7.4), fromHeight), 40, 108));
   const ch = Math.round(cw * 1.406);
   const sw = cw * small;
@@ -176,13 +214,17 @@ function layoutOn(input: CtInput): CtLayout {
     const left = (W - used) / 2 + (landscape ? 0 : (towerW + 12) / 2);
     for (let i = 0; i < input.trays; i++) trays.push({ x: left + i * (each + gap), y: trayTop, w: each, h: trayH });
   }
-  const bottomOfCentre = input.trays > 0 ? trayTop - 10 : handRect.y - 8;
+  const trayLabel = trayLabelOf(trayH, W, input.text);
+  // The cue's line, over the trays (or the hand): the centre and the tower end above it.
+  const cueY = (input.trays > 0 ? trayTop : handRect.y) - 34;
+  const bottomOfCentre = cueY - 6;
 
   // The tower down the left.
   const tower = { x: towerLeft, y: bandTop + bandH + 4, w: towerW, h: Math.max(bottomOfCentre - (bandTop + bandH + 4), 120) };
 
-  // The centre: in portrait the laid groups sit above the piles; sideways, beside them.
-  const centreLeft = towerLeft + towerW + (landscape ? pad : 6);
+  // The centre: in portrait the laid groups sit above the piles; sideways, beside them. It starts
+  // past the tower's shelf numbers, which hang off its right edge.
+  const centreLeft = towerLeft + towerW + towerReach(towerW) + (landscape ? pad : 4);
   const centreRight = W - insets.right - pad;
   const centreTop = bandTop + bandH + 6;
   const gap = cw * 0.22;
@@ -197,16 +239,29 @@ function layoutOn(input: CtInput): CtLayout {
   const laidScale = Math.min(small, ((rowH - 10) / ch) * 1.0);
   const lw = cw * laidScale;
   const lh = ch * laidScale;
-  const laid = new Map<number, { avatar: { x: number; y: number; size: number }; groups: { poses: Pose[]; rect: Rect }[] }>();
-  const mini = Math.round(lh * 0.62);
+  const laid: CtLayout["laid"] = new Map();
   const colW = laidW / cols;
+  // Each row's owner has a column of its own at the row's left, as tall as the row's groups: their
+  // cat, and their name tag under it (over the cat's foot, as a seat's is). The tag follows the
+  // reader's text size as far as the row allows; a long name ends in an ellipsis.
+  const text = input.text ?? 1;
+  const band = lh + 6;
+  const tagFont = Math.max(10, Math.round(Math.min(clamp(W * 0.028, 11 * text, 13 * text), band * 0.42)));
+  const tagH = Math.round(tagFont * 1.2 + 9);
+  const ownerW = Math.round(Math.min(Math.max(tagFont * 7.5, 60), Math.max(colW * 0.3, 60), 130));
+  const catSize = Math.round(Math.min(lh * 0.62, band - tagH + 8));
+  const cat = catSize >= 16 ? catSize : 0;
+  const stack = (cat ? cat - 8 : 0) + tagH;
   input.laid.forEach((row, i) => {
     const col = i % cols;
     const rowY = centreTop + Math.floor(i / cols) * rowH;
     const x0 = laidLeft + col * colW;
+    const top = rowY + lh / 2 - stack / 2;
+    const tag = { x: x0, y: top + stack - tagH, w: ownerW, h: tagH };
+    const avatar = { x: x0 + ownerW / 2, y: top + cat / 2, size: cat };
     const total = row.groups.reduce((sum, c) => sum + Math.max(c, 1), 0);
-    const step = Math.max(6, Math.min(lw * 0.46, (colW - mini - 20 - row.groups.length * (lw * 0.54 + 10)) / Math.max(total, 1)));
-    let x = x0 + mini + 10;
+    const step = Math.max(6, Math.min(lw * 0.46, (colW - ownerW - 20 - row.groups.length * (lw * 0.54 + 10)) / Math.max(total, 1)));
+    let x = x0 + ownerW + 10;
     const groups = row.groups.map((count) => {
       const poses = overlap(count, x, rowY, cw, ch, laidScale, step);
       const w = lw + step * Math.max(count - 1, 0);
@@ -214,7 +269,7 @@ function layoutOn(input: CtInput): CtLayout {
       x += w + 10;
       return { poses, rect };
     });
-    laid.set(row.seat, { avatar: { x: x0 + mini / 2, y: rowY + lh / 2, size: mini }, groups });
+    laid.set(row.seat, { avatar, tag, font: tagFont, groups });
   });
   const laidBottom = landscape ? centreTop : centreTop + rowCount * rowH;
 
@@ -247,13 +302,14 @@ function layoutOn(input: CtInput): CtLayout {
     hand,
     handRect,
     trays,
+    trayLabel,
     laid,
     action,
     centre: { x: cx, y: cy },
     // The cue the phone table draws today, centred over the trays or the hand.
-    banner: { x: W / 2 - 160, y: (lastTray ? trayTop : handRect.y) - 34, w: 320, h: 30 },
+    banner: { x: W / 2 - 160, y: cueY, w: 320, h: 30 },
     seats: new Map([...opponents].map(([k, at]) => [k, { x: at.x - avatar / 2, y: at.y - avatar / 2, w: avatar, h: avatar }])),
-    bannerRoom: { x: W / 2 - 160, y: (lastTray ? trayTop : handRect.y) - 34, w: 320, h: 30 },
+    bannerRoom: { x: W / 2 - 160, y: cueY, w: 320, h: 30 },
     menu: { x: 0, y: 0, w: 0, h: 0 },
   };
 }
@@ -437,7 +493,7 @@ function tvLayoutOn(input: CtInput): CtLayout {
     // Groups of a seat that isn't playing (none on a TV, as `opponents` is everyone) aren't drawn.
     const cell = cellOf.get(row.seat);
     if (!cell) continue;
-    laid.set(row.seat, { avatar: { ...opponents.get(row.seat)!, size: avatar }, groups: placeGroups(cell.area, row.groups, cw, ch, lw, cell.align) });
+    laid.set(row.seat, { avatar: { ...opponents.get(row.seat)!, size: avatar }, tag: { x: 0, y: 0, w: 0, h: 0 }, font: 0, groups: placeGroups(cell.area, row.groups, cw, ch, lw, cell.align) });
   }
 
   const deck = { x: cx - cw - pileGap / 2, y: cy - ch / 2, r: 0, s: 1, z: 5 };
@@ -460,6 +516,7 @@ function tvLayoutOn(input: CtInput): CtLayout {
     hand: [],
     handRect: { x: cx, y: cy, w: 0, h: 0 },
     trays: [],
+    trayLabel: { font: 0, w: 0 },
     laid,
     action: { x: cx, y: cy },
     centre: { x: cx, y: cy },
@@ -486,7 +543,7 @@ function onTv(L: CtLayout, input: CtInput): CtLayout {
     deckRect: box(L.deckRect),
     discardRect: box(L.discardRect),
     handRect: box(L.handRect),
-    laid: new Map([...L.laid].map(([k, v]) => [k, { avatar: { ...at(v.avatar), size: v.avatar.size * u }, groups: v.groups.map((g) => ({ poses: g.poses.map(at), rect: box(g.rect) })) }])),
+    laid: new Map([...L.laid].map(([k, v]) => [k, { ...v, avatar: { ...at(v.avatar), size: v.avatar.size * u }, tag: box(v.tag), groups: v.groups.map((g) => ({ poses: g.poses.map(at), rect: box(g.rect) })) }])),
     action: at(L.action),
     centre: at(L.centre),
     banner: box(L.banner),
@@ -496,14 +553,21 @@ function onTv(L: CtLayout, input: CtInput): CtLayout {
   };
 }
 
-/** Poses for `n` small cards in a tray. */
-export function trayPoses(tray: Rect, n: number, size: number, cw: number, ch: number, small: number): Pose[] {
+/** Where a tray's count sits: at its left, inside the rim, as tall as the tray. */
+export const trayLabelRect = (tray: Rect, label: TrayLabel): Rect => ({ x: tray.x + TRAY_PAD, y: tray.y, w: label.w, h: tray.h });
+
+/**
+ * Poses for `n` small cards in a tray, sized for `size`: fanned in what the tray has past its count
+ * (`label`, kept clear at its left), centred there.
+ */
+export function trayPoses(tray: Rect, n: number, size: number, cw: number, ch: number, small: number, label: TrayLabel = { font: 0, w: 0 }): Pose[] {
   const sw = cw * small;
   const sh = ch * small;
-  const inner = tray.w - 20;
-  const step = n <= 1 ? 0 : Math.min(sw * 0.62, (inner - sw) / Math.max(n - 1, size - 1, 1));
+  const left = tray.x + TRAY_PAD + (label.w > 0 ? label.w + LABEL_GAP : 0);
+  const inner = tray.x + tray.w - TRAY_PAD - left;
+  const step = n <= 1 ? 0 : Math.max(0, Math.min(sw * 0.62, (inner - sw) / Math.max(n - 1, size - 1, 1)));
   const width = sw + step * Math.max(n - 1, 0);
-  const x = tray.x + Math.max(10, (tray.w - width) / 2);
+  const x = left + Math.max(0, (inner - width) / 2);
   const y = tray.y + (tray.h - sh) / 2;
   return overlap(n, x, y, cw, ch, small, step);
 }

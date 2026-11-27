@@ -463,9 +463,41 @@
   paint-order: stroke fill;
 }
 
-.laid-owner .seat-avatar .ring {
-  border-width: 2px;
-  box-shadow: none;
+.laid-owner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.laid-owner .laid-cat {
+  position: relative;
+  display: block;
+  flex: none;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--ring) 60%, white), var(--ring));
+}
+
+.laid-owner.pickled .laid-cat {
+  background: var(--pickle);
+}
+
+.laid-owner .laid-cat img {
+  position: absolute;
+  inset: 4% 4% 0;
+  width: 92%;
+  height: 96%;
+  object-fit: contain;
+}
+
+/* Sized by the layout (ct-layout.ts): as tall as it says, never wider than the owner's column. */
+.laid-owner .name-tag {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  box-sizing: border-box;
+  padding: 0 7px;
 }
 
 /* The tower. */
@@ -495,7 +527,8 @@
   border-radius: 50%;
   background: var(--yellow);
   color: var(--ink);
-  font: 900 0.7rem var(--round);
+  /* Follows the text size only as far as "10" fits its 22 px circle. */
+  font: 900 min(0.7rem, 11px) var(--round);
   font-style: normal;
 }
 
@@ -575,16 +608,31 @@
   background: linear-gradient(180deg, #ff8a95, var(--refuse));
 }
 
+/* A tray's words, sized by the layout: what it wants while empty, then its count in the room kept
+   for it at the tray's left (ct-layout.ts, trayLabelOf), clear of the tray's cards. */
 .tray-label {
   position: absolute;
   left: 10px;
   top: 50%;
   translate: 0 -50%;
-  font: 900 clamp(0.85rem, 3.6vw, 1.05rem) var(--round);
+  font-weight: 900;
+  font-family: var(--round);
+  line-height: 1.2;
   color: var(--white);
+  white-space: nowrap;
   -webkit-text-stroke: 0.15em var(--ink);
   paint-order: stroke fill;
   pointer-events: none;
+}
+
+.tray-label.count {
+  text-align: center;
+}
+
+.tray-label.words {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-inline: 0.1em;
 }
 
 .hand-zone {
@@ -1145,10 +1193,6 @@
 .ctl .pile-count {
   min-width: calc(36px * var(--k, 1));
   font-size: calc(1.05rem * var(--k, 1));
-}
-
-.ctl .tray-label {
-  font-size: calc(clamp(0.85rem, 3.6vw, 1.05rem) * var(--k, 1));
 }
 
 /* A hand card shows as little as 38% of itself (ct-controller-layout.ts, SHOWS): a two-digit
