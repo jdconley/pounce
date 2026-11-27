@@ -5,7 +5,7 @@ import { player } from "../players/accounts";
 
 import { closesAt } from "./days";
 import { dailyModule } from "./games";
-import { close, countsForStreak, giveUp, moves, newRun, startView, useHint, type Answer, type RunState, type StartView } from "./run-core";
+import { close, countsForStreak, giveUp, moves, newRun, restart, startView, useHint, type Answer, type RunState, type StartView } from "./run-core";
 
 import type { DailyGameId, DailyModule, DailyResult } from "./module";
 import type { Env } from "../env";
@@ -60,9 +60,16 @@ export class DailyRun extends DurableObject<Env> {
     return startView(this.module(run.game), puzzle, run, now);
   }
 
-  /** Starts the run, or returns it as it stands: one run per player, game and date. */
-  /** `rules`: what the first start asked for; the run keeps them, and a later start's are ignored. */
+  /**
+   * Starts the run, or returns it as it stands: one run per player, game and date. `rules`: what
+   * the start asked for. The first start sets the run's rules; a later one that doesn't ask for
+   * them (an app from before them) puts an open run back on the game's first rules (`restart`).
+   */
   async start(a: { id: string; playerId: string; game: DailyGameId; date: Day; zone: string; now: number; rules?: string }): Promise<StartView> {
+    if (this.stored && this.stored.run.playerId === a.playerId) {
+      const { run, puzzle } = this.stored;
+      if (restart(this.module(run.game), puzzle, run, a.rules)) this.save();
+    }
     if (!this.stored) {
       // Two devices starting at once: the second waits here and gets the first's run.
       await this.ctx.blockConcurrencyWhile(async () => {

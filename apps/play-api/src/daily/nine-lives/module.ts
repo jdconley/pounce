@@ -136,6 +136,11 @@ export const nineLives: DailyModule<NineLivesPuzzle, NineLivesState, NineLivesMo
     return ended(p, applyReveal(s, reveal), reveal);
   },
   hintMs: (s) => (withLives(s) ? 0 : HINT_PENALTY_MS),
+  // Hints taken under lives stay free after the run goes back to the first rules.
+  freeHints: (s) => s.freeHints ?? 0,
+  rulesOf: (s) => (withLives(s) ? LIVES_RULES : undefined),
+  // Back to the first rules: the right numbers and hints stay, lives and wrong numbers go.
+  toFirstRules: (_p, s) => ({ cells: [...s.cells], hinted: [...s.hinted], ...(s.hinted.length > 0 ? { freeHints: s.hinted.length } : {}) }),
   progress: (p, s) => progressOf(p.givens, s.cells),
   publicState(p, s) {
     if (!withLives(s)) return { cells: [...s.cells], hinted: [...s.hinted] };

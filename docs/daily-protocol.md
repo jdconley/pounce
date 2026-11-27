@@ -360,6 +360,10 @@ Spec §3, "The clock" (JD, 2026-11-26).
 
 ### The `"lives"` rules (`{ "rules": "lives" }` at start)
 
+Send `{ "rules": "lives" }` on EVERY Nine Lives start, a resume too. A start without it on an open
+lives run is an app that can't show lives: the run goes back to the first rules for good (hints
+used so far stay free), and its state then has no `rules`. Draw from the state start returns.
+
 Spec: [Nine Lives: lives and hints](superpowers/specs/2026-11-20-daily-games-design.md#nine-lives-lives-and-hints).
 
 - **State:**

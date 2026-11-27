@@ -84,7 +84,7 @@ export async function startRun(env: Env, deviceId: string, playerId: string, gam
   const noted = await me.noteRun(view.date, view.game, view.run, view.startedAt);
   if (noted === null) return json(404, { error: "no_player" });
   // A merge noted another run meanwhile: that one is this player's.
-  if (noted !== view.run) return json(200, await runs(env, noted).start({ id: noted, playerId, game: module.id as DailyGameId, date: day.day, zone: day.zone, now }));
+  if (noted !== view.run) return json(200, await runs(env, noted).start({ id: noted, playerId, game: module.id as DailyGameId, date: day.day, zone: day.zone, now, ...(rules ? { rules } : {}) }));
   return json(200, view);
 }
 

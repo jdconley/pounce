@@ -35,6 +35,14 @@ export interface DailyModule<P = unknown, S = unknown, M = unknown> {
   apply(p: P, s: S, m: M, msSinceStart: number): Applied<S>;
   hint(p: P, s: S): Applied<S> | null;          // null: this game has no hints
   hintMs?(s: S): number;                        // what one hint adds to the time; unset: HINT_PENALTY_MS
+  freeHints?(s: S): number;                     // hints already used that cost nothing (taken under other rules)
+  rulesOf?(s: S): string | undefined;           // the run's rules, when not the game's first ones
+  /**
+   * The run on its game's first rules. A start that doesn't ask for the run's rules is an app that
+   * can't show them, so an open run goes back to the first rules for good (spec, "Nine Lives:
+   * lives and hints").
+   */
+  toFirstRules?(p: P, s: S): S;
   progress(p: P, s: S): number;                 // 0..1, spoiler-free
   publicState(p: P, s: S): unknown;             // what a resuming client and a watching TV get
   result(p: P, s: S, outcome: Outcome, timeMs: number, hints: number): Omit<DailyResult, "game" | "date" | "number" | "tooFast" | "percent">;

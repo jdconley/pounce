@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { seedOf } from "../../../tests/seeds";
 import { createRng } from "../../rules/rng";
 import { addToStats, rankGame, dish, type BoardRow } from "../board";
-import { countsForStreak, giveUp, HINT_PENALTY_MS, moves, newRun, startView, useHint, type RunState } from "../run-core";
+import { countsForStreak, giveUp, HINT_PENALTY_MS, moves, newRun, restart, startView, useHint, type RunState } from "../run-core";
 
 import { HINTS, LIVES, LIVES_RULES, nineLives } from "./module";
 
@@ -164,6 +164,38 @@ describe("Nine Lives with lives: three hints, separate from lives", () => {
     play(r, [wrong(open[0]!), wrong(open[0]!)]);
     for (let k = 0; k < HINTS; k++) expect(useHint(m, p, r, T0 + 60_000 + k * 1_000, k)).toMatchObject({ ok: true });
     expect((r.state as NineLivesState).lives).toBe(1);
+  });
+});
+
+describe("an app that can't show lives never plays by them (spec, \"Older apps keep their rules\")", () => {
+  test("a start without the rules puts an open lives run back on the first rules, for good", () => {
+    const r = run(LIVES_RULES);
+    play(r, [wrong(open[0]!), wrong(open[0]!)]);
+    useHint(m, p, r, T0 + 30_000, 0);
+    expect(restart(m, p, r, LIVES_RULES)).toBe(false);
+    expect(restart(m, p, r, undefined)).toBe(true);
+    const v = startView(m, p, r, T0 + 40_000);
+    expect(Object.keys(v.state as object).sort()).toEqual(["cells", "hinted"]);
+    expect(v.hintMs).toBe(HINT_PENALTY_MS);
+    // A third wrong number is just a number now; asking for lives again doesn't bring them back.
+    expect(play(r, [wrong(open[1]!)], T0 + 40_000)[0]).toMatchObject({ ok: true, result: null });
+    expect(restart(m, p, r, LIVES_RULES)).toBe(false);
+  });
+
+  test("hints taken under lives stay free; hints after cost 30 s", () => {
+    const r = run(LIVES_RULES);
+    useHint(m, p, r, T0 + 1_000, 0);
+    restart(m, p, r, undefined);
+    useHint(m, p, r, T0 + 2_000, 1);
+    expect(giveUp(m, p, r, T0 + 10_000, 9_000)).toMatchObject({ result: { hints: 2, timeMs: 9_000 + HINT_PENALTY_MS } });
+  });
+
+  test("an ended run, and a run on the first rules, are left as they are", () => {
+    const done = run(LIVES_RULES);
+    play(done, [wrong(open[0]!), wrong(open[0]!), wrong(open[0]!)]);
+    expect(restart(m, p, done, undefined)).toBe(false);
+    expect(startView(m, p, done, T0 + 60_000).state).toMatchObject({ lives: 0 });
+    expect(restart(m, p, run(), undefined)).toBe(false);
   });
 });
 

@@ -20,7 +20,7 @@ export type Wrong = { i: number; d: number };
  * `"lives"` rules (spec, "Nine Lives: lives and hints") also the lives left and every wrong
  * number entered; a run on the first rules has neither.
  */
-export type NineLivesState = { cells: Cells; hinted: number[]; lives?: number; wrong?: Wrong[] };
+export type NineLivesState = { cells: Cells; hinted: number[]; lives?: number; wrong?: Wrong[]; freeHints?: number };
 
 const range9 = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 

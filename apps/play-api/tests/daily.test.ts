@@ -620,8 +620,8 @@ describe("Nine Lives' lives, through the routes (spec, \"Nine Lives: lives and h
     const s = await nine(mf, device, person, { rules: "lives" });
     expect(s.state).toMatchObject({ rules: "lives", lives: 3, hintsLeft: 3, wrong: [] });
     expect(s.hintMs).toBe(0);
-    // A later start without the body is the same run, on the same rules.
-    const again = await nine(mf, device, person);
+    // A later start that asks again (another device with today's app) is the same run, on the same rules.
+    const again = await nine(mf, device, person, { rules: "lives" });
     expect(again.run).toBe(s.run);
     expect(again.state).toMatchObject({ rules: "lives", lives: 3 });
 
@@ -645,6 +645,27 @@ describe("Nine Lives' lives, through the routes (spec, \"Nine Lives: lives and h
     // a second is too fast for the board, so it isn't checked here; the ranking is in lives.test.ts.)
     const stats = async () => ((await (await call(mf, device, "GET", `/v1/daily/stats?person=${person.id}`)).json()) as { games: Record<string, { played: number; solved: number; streak: number }> }).games;
     expect((await eventually(stats, (g) => (g["nine-lives"]?.played ?? 0) > 0))["nine-lives"]).toMatchObject({ played: 1, solved: 0, streak: 1 });
+  }, 30_000);
+
+  test("an app from before lives that opens a lives run puts it back on the first rules, so it is never failed by lives it can't show", async () => {
+    const mf = await start();
+    const { device, person } = await someone(mf);
+    const s = await nine(mf, device, person, { rules: "lives" });
+    const solution = await solutionOf(mf, s.date);
+    const open = s.puzzle.givens.flatMap((d, i) => (d === 0 ? [i] : []));
+    const wrong = (i: number) => ({ k: "set", i, d: (solution[i]! % 9) + 1 });
+    // Two wrong numbers on today's app: one life left.
+    expect(await (await send(mf, device, person, s.run, { from: 0, moves: [wrong(open[0]!), wrong(open[1]!)] })).json()).toMatchObject({ ok: true, result: null });
+    // The 1.3 app (no body) opens the same run: first rules from now on.
+    const old = await nine(mf, device, person);
+    expect(old.run).toBe(s.run);
+    expect(Object.keys(old.state).sort()).toEqual(["cells", "hinted"]);
+    expect(old.hintMs).toBe(30_000);
+    // Three more wrong numbers, and a clear: nothing ends the run.
+    const a = (await (await send(mf, device, person, s.run, { from: 2, moves: [wrong(open[2]!), wrong(open[3]!), wrong(open[4]!), { k: "clear", i: open[2]! }] })).json()) as { ok: boolean; result: unknown };
+    expect(a).toMatchObject({ ok: true, seq: 6, result: null });
+    // Today's app opening it again doesn't bring lives back.
+    expect(Object.keys((await nine(mf, device, person, { rules: "lives" })).state).sort()).toEqual(["cells", "hinted"]);
   }, 30_000);
 
   test("a start that doesn't ask (every app before lives) plays the first rules, and the body never breaks a start", async () => {

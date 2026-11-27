@@ -121,7 +121,7 @@ function noteCall(r: RunState, now: number, reported?: number): void {
 
 /** Ends the run at `at` and works out its result, on the server's numbers and the active time. */
 function end(m: DailyModule, p: unknown, r: RunState, outcome: Outcome, at: number): DailyResult {
-  const timeMs = activeAt(r, at) + hintMs(m, r) * r.hints;
+  const timeMs = activeAt(r, at) + hintMs(m, r) * Math.max(0, r.hints - (m.freeHints?.(r.state) ?? 0));
   const base = m.result(p, r.state, outcome, timeMs, r.hints);
   // Only the result's own fields: the server's numbers, and the game's guesses, points and
   // progress. Nothing else a game returns (an answer, say) ever reaches a board.
@@ -173,6 +173,19 @@ export function newRun(
     activeReported: false,
     lastCallAt: a.now,
   };
+}
+
+/**
+ * A later start on a run. When it doesn't ask for the rules the open run plays (an app from before
+ * them, which can't show them), the run goes back to its game's first rules for good, so that app
+ * is never held to rules it can't show. True: the run changed.
+ */
+export function restart(m: DailyModule, p: unknown, r: RunState, rules: string | undefined): boolean {
+  if (r.ended || !m.rulesOf || !m.toFirstRules) return false;
+  const current = m.rulesOf(r.state);
+  if (current === undefined || current === rules) return false;
+  r.state = m.toFirstRules(p, r.state);
+  return true;
 }
 
 /** The run as start answers it: the public puzzle and state only, never the whole puzzle. */

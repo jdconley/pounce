@@ -208,10 +208,13 @@ rules, and must never break.
   marketing version as the one in App Review (1.3), so a version gate can't tell them apart. An app
   saying what it can play is how the server already tells games apart (`X-Pounce-Games`). The web
   player ships with the server and always asks.
-- **A run keeps its rules on every device.** A run started on the new rules and resumed on an old
-  app still costs lives on the server. The old app ignores what it doesn't know, never breaks, and
-  shows the end when the server ends the run ("Missed", in its words). A run started on an old app
-  and resumed on a new one plays the first rules.
+- **An old app is never held to lives it can't show.** *(Ruling, checked by the manager.)* Every
+  app calls start before it plays. A start without `{ "rules": "lives" }` on an open lives run (the
+  player started on the web or today's app, then opened the same puzzle in 1.2 or 1.3) puts that
+  run back on the first rules, for good. The right numbers and hints stay; lives and wrong numbers
+  go; hints already used stay free, and later ones cost 30 seconds. Asking for lives again later
+  doesn't bring them back, and today's apps play the run on the first rules from then on.
+- A run started on an old app and resumed on a new one plays the first rules.
 - **A mixed family's board.** Everyone ranks by time. A run on the first rules still carries its
   30 seconds a hint, so free hints can't be had by the dozen; a run on the new rules has at most
   three. Both show the hinted mark. Old apps read a failed run as "Missed", which is true.
