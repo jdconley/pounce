@@ -119,7 +119,7 @@ names are placeholders until JD has seen them in the app.
 
 | Name | Rule set | Played on |
 |---|---|---|
-| **Nine Lives** | sudoku | a 9 by 9 grid of paw tiles, digits 1 to 9 |
+| **Nine Lives** | the number grid | a 9 by 9 grid of paw tiles, digits 1 to 9 |
 | **Box Fort** | block placing | an 8 by 8 rug of cardboard boxes |
 | **Sniff** | five-letter word guessing | six guesses, letters on scent tags |
 | **Cat Nap** | the Queens-style animal puzzle (Zoodoku's rule set; JD confirmed) | an N by N quilt of colored patches |
@@ -127,22 +127,86 @@ names are placeholders until JD has seen them in the app.
 The hub is called **the Daily Dish**: four treats in a bowl, one a day each. *(My call; the name is
 a placeholder too.)*
 
-#### Nine Lives (sudoku)
+#### Nine Lives (the number grid)
 
 - **Rules.** Fill the grid so each row, column and 3 by 3 box holds 1 to 9 once.
 - **Puzzles** have one solution, and are graded by a logic solver by the hardest technique needed.
 - **Controls.**
   - Tap a cell, then a number.
-  - Notes (pencil marks) live on the client only.
-  - A cell that clashes with a given or a placed number shows the clash. That's only the visible
-    rule, so it gives away nothing.
-  - There's no "this is wrong" check against the solution.
-- **Finish.** The run ends when the grid is full and correct. A full grid with a mistake says "Not
-  quite" and play goes on.
-- **Score:** the time, on the server's clock.
-- **Hint:** it fills one cell, from the server, and adds 30 seconds. The board shows a small mark on
-  a hinted result.
+  - Notes (pencil marks) live on the client only. They never cost a life.
+- **Three lives and three hints** (the family's request, via JD, 2026-11-26: "get rid of the hint
+  penalty and give us 3 lives ... and you can also get 3 hints. separate helps."). See
+  [Nine Lives: lives and hints](#nine-lives-lives-and-hints) below for the whole rule, the
+  rulings and how older apps keep their rules.
+- **Finish.** The run ends solved when every cell holds its answer, or missed on the third wrong
+  number ("Out of lives").
+- **Score:** the time, on the server's clock. Hints cost no time.
 - **Give up** ends the run, unsolved.
+
+##### Nine Lives: lives and hints
+
+*Added 2026-11-26. This replaces the first rules: no check against the solution, a clash shown
+only against the visible rule, "Not quite" on a full grid with a mistake, and a hint that filled a
+cell and added 30 seconds.*
+
+- **What "wrong" means.** The first rules had no "wrong": the server never compared a cell with
+  the solution, the board showed only clashes (a digit repeated in a row, column or box), and a full
+  grid with a mistake said "Not quite". **Ruling:** a number is wrong when it isn't the solution's
+  digit for that cell, checked by the server the moment it is entered. A clash is no longer the
+  test: a digit that clashes is always wrong, and a digit that clashes with nothing can still be
+  wrong.
+- **A right number** stays and locks, like a given. It can't be cleared or changed.
+- **A wrong number** costs one life. It isn't placed: the cell stays empty to the server, and the
+  phone shows the digit in the cell as wrong until the player enters another or erases it. Erasing
+  it costs nothing. The same wrong digit again in the same cell costs another life, so the apps
+  don't send it.
+- **Three lives.** The third wrong number ends the run: outcome `missed`, the same outcome Sniff
+  uses when its sixth guess misses.
+- **Three hints, separate from lives.** A hint fills one cell, from the server, as before. It costs
+  no time and no life. After three, the Hint button is spent. Lives never limit hints, and hints
+  never restore lives.
+- **Notes** stay on the phone and never cost a life.
+- **Failing.** The board fills in the rest of the solution, kindly, under one short line ("Out of
+  lives"), then the end screen. The server sends the solution only once the run has ended this way.
+- **No second try.** A failed run is that day's run, as every run is: starting again returns it,
+  ended (§3, "One run per player"). An account merge keeps one run per puzzle, as before.
+
+**How a failed run counts** (the ruling, kept the same as the other Dish puzzles' losses):
+
+| | Solved | Failed (out of lives) | Gave up | Closed at 04:00 |
+|---|---|---|---|---|
+| Outcome | `solved` | `missed`, as Sniff's sixth miss | `gaveUp` | `closed` |
+| Your own and shared streaks (§5) | counts | counts | counts | doesn't |
+| The game's own streak, in stats | counts | counts | counts | ends it |
+| Stats: played / solved | both | played | played | played |
+| The board (§6) | ranked by time | after every solved run, by progress, then time | the same | the same |
+| The Dish's points (§6) | its place's points, plus 1 | the same: its place's, plus 1 | the same | its place's only |
+| What the apps call it | the time | "Out of lives" | "Gave up" | "Out of time" |
+
+- So a failed Nine Lives run is exactly a missed Sniff run: you played, you ended it, it ranks
+  after the solvers. *(My call: a loss in the Dish is never worse for streaks than giving up, and
+  never better than solving.)*
+
+**Older apps keep their rules.** The 1.2 App Store app and the 1.3 build in review play the first
+rules, and must never break.
+
+- **The rules are fixed per run, at its first start.** A start that asks for them gets the new
+  rules: `POST /v1/daily/nine-lives/start` with the body `{ "rules": "lives" }`. A start without it
+  (every app before this change) gets the first rules, unchanged: no lives, unlimited hints, 30
+  seconds a hint, clashes and "Not quite".
+- **Why a declaration, not a version number.** Builds from `main` go to TestFlight with the same
+  marketing version as the one in App Review (1.3), so a version gate can't tell them apart. An app
+  saying what it can play is how the server already tells games apart (`X-Pounce-Games`). The web
+  player ships with the server and always asks.
+- **A run keeps its rules on every device.** A run started on the new rules and resumed on an old
+  app still costs lives on the server. The old app ignores what it doesn't know, never breaks, and
+  shows the end when the server ends the run ("Missed", in its words). A run started on an old app
+  and resumed on a new one plays the first rules.
+- **A mixed family's board.** Everyone ranks by time. A run on the first rules still carries its
+  30 seconds a hint, so free hints can't be had by the dozen; a run on the new rules has at most
+  three. Both show the hinted mark. Old apps read a failed run as "Missed", which is true.
+- **Nothing else changes for old apps:** the same routes, fields and outcomes. The new state fields
+  and reveals are additive, and the old apps' decoders skip them.
 
 #### Box Fort (block placing)
 
