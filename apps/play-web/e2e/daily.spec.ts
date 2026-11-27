@@ -249,10 +249,10 @@ test("at the largest text nothing clips or overlaps: Home and its posters, the D
     expect(await button.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), `${name} fits`).toBe(true);
   }
 
-  // Each game's poster: Play never covers its player count.
+  // Each game's poster: Play (or a TV game's "Starts on the TV") never covers its player count.
   for (const poster of await page.locator(".poster").all()) {
     const count = (await poster.locator(".players").boundingBox())!;
-    const play = (await poster.getByRole("button").boundingBox())!;
+    const play = (await poster.locator(".poster-play, .poster-tv").first().boundingBox())!;
     expect(overlaps(count, play), "Play over the player count").toBe(false);
   }
 
