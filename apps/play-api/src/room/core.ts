@@ -614,28 +614,28 @@ export class RoomCore<S = CatTowerState> {
     return s.playerId === undefined ? removed.devices.includes(s.deviceId as string) : removed.players.includes(s.playerId);
   }
 
-  /** A device whose every player here (it speaks for one at least) the host removed. */
-  private onlyRemovedPlayers(players: Record<string, string>): boolean {
-    const removed = this.state.removed?.players ?? [];
+  /**
+   * Whether the device, speaking for `players`, holds a seat here that its host didn't remove,
+   * other than `except`. A seat out of the game (its person left) still counts: it is theirs.
+   */
+  private keepsSeat(deviceId: string, players: Record<string, string>, except?: Seat): boolean {
     const speaks = Object.values(players);
-    return speaks.length > 0 && speaks.every((p) => removed.includes(p));
+    return this.state.seats.some(
+      (s, i) => i !== except && !this.removedSeat(s) && (s.playerId === undefined ? s.deviceId === deviceId : speaks.includes(s.playerId)),
+    );
   }
 
   /**
-   * Whether the room turns this device away on a socket upgrade (design §10.2): the host removed
-   * it, or it comes as a removed player and speaks for nobody still seated here. `players` is
-   * whom it speaks for on this upgrade. A shared phone that still holds another seat is let in;
-   * its removed player is refused a seat.
+   * The one rule for who is out at a same-room table (design §10.2): a device the host removed,
+   * or one that comes as a removed player and holds no seat here that wasn't removed. A shared
+   * phone with another seat, in the game or out of it, stays; its removed player can't sit.
+   * `players`: whom it speaks for (an upgrade's header); left out, its record's. The room refuses
+   * its upgrades, leaves it off Play again and off the tables lists.
    */
-  turnedAway(deviceId: string, players: Record<string, string>): boolean {
+  turnedAway(deviceId: string, players: Record<string, string> = this.state.devices[deviceId]?.players ?? {}): boolean {
     if (this.isRemoved(deviceId)) return true;
     const removed = this.state.removed?.players ?? [];
-    const speaks = Object.values(players);
-    if (!speaks.some((p) => removed.includes(p))) return false;
-    return !this.inSeats().some((i) => {
-      const s = this.state.seats[i] as SeatInfo;
-      return s.playerId === undefined ? s.deviceId === deviceId : speaks.includes(s.playerId);
-    });
+    return Object.values(players).some((p) => removed.includes(p)) && !this.keepsSeat(deviceId, players);
   }
 
   /**
@@ -1937,9 +1937,7 @@ export class RoomCore<S = CatTowerState> {
     if (!this.sameRoom()) return {};
     // Every seat's device has been here, so it is among them; so is the device asking.
     const ids = new Set([...Object.keys(this.state.devices), ...(this.state.members ?? [])]);
-    // Not a removed device, nor one that came back here only as a removed player.
-    const out = (id: string) => this.isRemoved(id) || this.onlyRemovedPlayers(this.state.devices[id]?.players ?? {});
-    return { members: [...ids].filter((id) => !this.isScreen(id) && !out(id)) };
+    return { members: [...ids].filter((id) => !this.isScreen(id) && !this.turnedAway(id)) };
   }
 
   /** Four uint32 words from the room's rng, which is crypto-backed in production. */
@@ -1971,10 +1969,10 @@ export class RoomCore<S = CatTowerState> {
     if (!this.sameRoom() || deviceId !== state.hostDeviceId) return [this.fail(deviceId, "not_allowed")];
     const target = state.seats[seat];
     if (!target || target.kind !== "human" || this.controls(deviceId, seat)) return [this.fail(deviceId, "bad_seat")];
-    const inSeat = this.inSeats();
-    // The devices that hold the seat now, and the one that claimed it, even while it isn't here.
+    // The devices that hold the seat now, and the one that claimed it, even while it isn't here,
+    // unless they keep another seat (`turnedAway`'s rule).
     const holders = new Set([...Object.keys(state.devices).filter((id) => this.controls(id, seat)), target.deviceId].filter((id) => id !== undefined));
-    const devices = [...holders].filter((id) => id !== state.hostDeviceId && !inSeat.some((i) => i !== seat && this.controls(id, i)));
+    const devices = [...holders].filter((id) => id !== state.hostDeviceId && !this.keepsSeat(id, state.devices[id]?.players ?? {}, seat));
     const prior = state.removed ?? { devices: [], players: [] };
     state.removed = {
       devices: [...new Set([...prior.devices, ...devices])],

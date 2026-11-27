@@ -954,7 +954,8 @@ export class GameRoom extends DurableObject<Env> {
   private async updateTables(core: Room): Promise<void> {
     const { state } = core;
     const actor = state.status === "playing" ? core.actor() : null;
-    const devices = tableDevices(state);
+    // A device the host turned away is off the list: it can't go back (design §10.2).
+    const devices = new Set([...tableDevices(state)].filter((id) => !core.turnedAway(id)));
     const players = new Set(core.seatPlayers());
     const next = state.rematch?.code ?? null;
     // Who sits where, and as whom: a join, a rename or a new cat reaches Home's cards.

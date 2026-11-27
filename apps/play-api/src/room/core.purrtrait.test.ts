@@ -1110,6 +1110,29 @@ describe("remove (design §10.2, ruling 10)", () => {
     expect(spec.hostDeviceId).toBe("a");
   });
 
+  it("a shared phone whose other person left the game is still let in when one of its people is removed", () => {
+    const r = lobby3();
+    // "c" seats player 3 and player 4.
+    r.connect("c", { ...players(3), ...players(4) });
+    r.handle("a", { t: "configure", seat: 3, kind: "open" });
+    expect(errorsOf(r.handle("c", { t: "claim", seat: 3, person: person(4) }))).toEqual([]);
+    expect(errorsOf(r.handle("a", { t: "start" }))).toEqual([]);
+    expect(errorsOf(act(r, "c", 3, { type: "forfeit" }))).toEqual([]);
+    expect(errorsOf(remove(r, "a", 2))).toEqual([]);
+    // Player 4's seat is out of the game, not removed: it still keeps the phone at the table.
+    expect(r.state.removed).toEqual({ devices: [], players: [player(3)] });
+    expect(r.state.devices.c).toBeDefined();
+    expect(r.turnedAway("c", { ...players(3), ...players(4) })).toBe(false);
+    expect(r.turnedAway("c")).toBe(false);
+    expect(r.controlledSeats("c")).toEqual([3]);
+    // Without player 4, the phone would be turned away.
+    expect(r.turnedAway("c", players(3))).toBe(true);
+    act(r, "b", 1, { type: "forfeit" });
+    expect(r.state.status).toBe("over");
+    r.handle("a", { t: "rematch" });
+    expect(r.drainRematch()?.members?.sort()).toEqual(["a", "b", "c"]);
+  });
+
   it("a removed device's seat is matched by its player when it has one", () => {
     const r = lobby3();
     // "c" holds no player of its own for seat 2 any more: the seat is player 3's, wherever they are.

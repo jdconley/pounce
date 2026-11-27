@@ -279,6 +279,10 @@ describe("the host removes a player (design §10.2)", { timeout: 30_000 }, () =>
     pa.send({ t: "configure", seat: 2, kind: "open" });
     await pa.until((s) => s.room.seats[2]?.kind === "open");
     const pc = await sit(mf, code, screen, c, 2, cy);
+    const guest = await mint(mf);
+    pa.send({ t: "configure", seat: 3, kind: "open" });
+    await pa.until((s) => s.room.seats[3]?.kind === "open");
+    const pg = await sit(mf, code, screen, guest, 3, newPerson("Di", 4));
     pa.send({ t: "start" });
     await pa.until((s) => s.room.purrtrait?.phase === "choosing");
     const closed = closing(pc);
@@ -286,6 +290,13 @@ describe("the host removes a player (design §10.2)", { timeout: 30_000 }, () =>
     expect(await closed).toBe(4403);
     await pa.until((s) => s.room.purrtrait?.out[2] === true);
     expect(pa.last?.room.status).toBe("playing");
+    // A removed guest's phone (no player of its own) loses the table from its list.
+    const codes = async (d: Device) => ((await (await call(mf, d, "GET", "/v1/devices/me/tables", undefined, PURR)).json()) as { tables: { code: string }[] }).tables.map((t) => t.code);
+    expect(await codes(guest)).toContain(code);
+    const gone = closing(pg);
+    pa.send({ t: "remove", seat: 3 });
+    expect(await gone).toBe(4403);
+    expect(await eventually(() => codes(guest), (list) => !list.includes(code))).not.toContain(code);
     // The removed player on another device, with the TV's live key: refused too.
     const y = await mint(mf);
     await profile(mf, y, [cy]);
