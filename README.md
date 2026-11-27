@@ -19,6 +19,11 @@ The games:
   [play.conleychaos.com/play](https://play.conleychaos.com/play) and on its TV page; coming to the
   iPhone app in 1.3 (in TestFlight). Design:
   [docs/superpowers/specs/2026-11-25-birdwatch-design.md](docs/superpowers/specs/2026-11-25-birdwatch-design.md).
+- **Purrtrait** (coming): a draw-and-guess game for one room, two to ten players. The drawer
+  draws a word on their phone, the TV shows the drawing as it is drawn, and everyone else calls
+  out guesses. It starts on a TV, and you join from the TV's code. Not playable yet: the server
+  half is built and switched off. Design:
+  [docs/superpowers/specs/2026-11-26-purrtrait-design.md](docs/superpowers/specs/2026-11-26-purrtrait-design.md).
 - **The Daily Dish**: four new puzzles every day, the same for the whole family, with a family
   board and streaks. Sniff (find the five-letter word), Nine Lives (a number grid), Cat Nap (one
   cat in each row, column and patch) and Box Fort (drag blocks onto a rug). In the app since 1.2,
@@ -86,8 +91,8 @@ cp apps/play-api/.dev.vars.example apps/play-api/.dev.vars   # gitignored
 pnpm --filter @pounce/play-api exec wrangler dev --port 8787
 ```
 
-The example `.dev.vars` sets `GAMES=tiles,birdwatch`, which lets the local server deal the tile game
-and Birdwatch as well as Cat Tower; `apps/play-ios/scripts/dev-server.sh` passes `tiles` unless
+The example `.dev.vars` sets `GAMES=tiles,birdwatch,purrtrait`, which lets the local server deal the
+tile game, Birdwatch and Purrtrait as well as Cat Tower; `apps/play-ios/scripts/dev-server.sh` passes `tiles` unless
 `DEV_SERVER_GAMES` says otherwise. Production's
 `GAMES` in `apps/play-api/wrangler.jsonc` is `tiles,birdwatch`: apps from version 1.1 deal and
 play the tile game, version 1.0 never sees a tile table, and only 1.3 and the web player see

@@ -1,0 +1,2409 @@
+[
+  {
+    "name": "snapshot-lobby-screen",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 8,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "lobby",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "options": {
+          "timer": 90
+        },
+        "screen": true,
+        "near": {
+          "key": "BBBBQMK6",
+          "code": "BCDFGBBB",
+          "expiresIn": 30000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-lobby-host",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 8,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "lobby",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "options": {
+          "timer": 90
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-lobby-guest",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 8,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "lobby",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          },
+          {
+            "kind": "closed",
+            "yours": false,
+            "presence": null
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "options": {
+          "timer": 90
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-choosing-drawer",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 9,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "choosing",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": null,
+          "level": null,
+          "remainingMs": 8000,
+          "paused": false,
+          "turn": "1:0",
+          "last": null,
+          "winners": [],
+          "choices": {
+            "easy": "robot",
+            "tricky": "thunder"
+          }
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-choosing-drawer-other-device",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 9,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "choosing",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": null,
+          "level": null,
+          "remainingMs": 8000,
+          "paused": false,
+          "turn": "1:0",
+          "last": null,
+          "winners": [],
+          "choices": {
+            "easy": "robot",
+            "tricky": "thunder"
+          }
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-choosing-guesser",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 9,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "choosing",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": null,
+          "level": null,
+          "remainingMs": 8000,
+          "paused": false,
+          "turn": "1:0",
+          "last": null,
+          "winners": []
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-choosing-screen",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 9,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "choosing",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": null,
+          "level": null,
+          "remainingMs": 8000,
+          "paused": false,
+          "turn": "1:0",
+          "last": null,
+          "winners": []
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true,
+        "near": {
+          "key": "BBBBQMK6",
+          "code": "BCDFGBBB",
+          "expiresIn": 28000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-choosing-kitten-drawer",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 6,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 3,
+          "timer": 60,
+          "rounds": 2,
+          "phase": "choosing",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2
+          ],
+          "scores": [
+            0,
+            0,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false
+          ],
+          "group": null,
+          "level": null,
+          "remainingMs": 10000,
+          "paused": false,
+          "turn": "1:0",
+          "last": null,
+          "winners": [],
+          "choices": {
+            "easy": "robot",
+            "tricky": "store"
+          }
+        },
+        "options": {
+          "timer": 60
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-drawing-drawer",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 10,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "drawing",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": "outside",
+          "level": "tricky",
+          "remainingMs": 75000,
+          "paused": false,
+          "turn": "1:0",
+          "last": null,
+          "winners": [],
+          "word": "thunder",
+          "youDraw": true
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-drawing-drawer-other-device",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 10,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "drawing",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": "outside",
+          "level": "tricky",
+          "remainingMs": 75000,
+          "paused": false,
+          "turn": "1:0",
+          "last": null,
+          "winners": []
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-drawing-guesser",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 10,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "drawing",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": "outside",
+          "level": "tricky",
+          "remainingMs": 75000,
+          "paused": false,
+          "turn": "1:0",
+          "last": null,
+          "winners": []
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-drawing-screen",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 10,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "drawing",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": "outside",
+          "level": "tricky",
+          "remainingMs": 75000,
+          "paused": false,
+          "turn": "1:0",
+          "last": null,
+          "winners": []
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true,
+        "near": {
+          "key": "BBBBQMK6",
+          "code": "BCDFGBBB",
+          "expiresIn": 13000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-paused-drawer",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 11,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "drawing",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": "outside",
+          "level": "tricky",
+          "remainingMs": 65000,
+          "paused": true,
+          "turn": "1:0",
+          "last": null,
+          "winners": [],
+          "word": "thunder",
+          "youDraw": true
+        },
+        "options": {
+          "timer": 90
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-paused-guesser",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 11,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "drawing",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": "outside",
+          "level": "tricky",
+          "remainingMs": 65000,
+          "paused": true,
+          "turn": "1:0",
+          "last": null,
+          "winners": []
+        },
+        "options": {
+          "timer": 90
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-reveal-screen",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 13,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "reveal",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            2,
+            0,
+            2,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": "outside",
+          "level": "tricky",
+          "remainingMs": null,
+          "paused": false,
+          "turn": "1:0",
+          "last": {
+            "word": "thunder",
+            "guesser": 2,
+            "points": 2
+          },
+          "winners": []
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true,
+        "near": {
+          "key": "4Q7J7R4X",
+          "code": "BCDFG4Q7",
+          "expiresIn": 20000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-reveal-guesser",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 13,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "reveal",
+          "round": 1,
+          "drawer": 0,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            2,
+            0,
+            2,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": "outside",
+          "level": "tricky",
+          "remainingMs": null,
+          "paused": false,
+          "turn": "1:0",
+          "last": {
+            "word": "thunder",
+            "guesser": 2,
+            "points": 2
+          },
+          "winners": []
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-reveal-time-up-screen",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 16,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "reveal",
+          "round": 1,
+          "drawer": 1,
+          "order": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "scores": [
+            2,
+            0,
+            2,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            false
+          ],
+          "group": "actions",
+          "level": "easy",
+          "remainingMs": null,
+          "paused": false,
+          "turn": "1:1",
+          "last": {
+            "word": "eat",
+            "guesser": null,
+            "points": 0
+          },
+          "winners": []
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true,
+        "near": {
+          "key": "TR49FMWG",
+          "code": "BCDFGTR4",
+          "expiresIn": 30000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-reveal-seat-removed-screen",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 22,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "playing",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "away"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "reveal",
+          "round": 1,
+          "drawer": 3,
+          "order": [
+            0,
+            1,
+            2
+          ],
+          "scores": [
+            2,
+            0,
+            2,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "group": "food",
+          "level": "easy",
+          "remainingMs": null,
+          "paused": false,
+          "turn": "1:3",
+          "last": {
+            "word": "cupcake",
+            "guesser": null,
+            "points": 0
+          },
+          "winners": []
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true,
+        "near": {
+          "key": "TR49FMWG",
+          "code": "BCDFGTR4",
+          "expiresIn": 18000
+        }
+      }
+    }
+  },
+  {
+    "name": "snapshot-over-screen",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 32,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "over",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "away"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "over",
+          "round": 2,
+          "drawer": null,
+          "order": [
+            0,
+            1,
+            2
+          ],
+          "scores": [
+            6,
+            3,
+            3,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "group": null,
+          "level": null,
+          "remainingMs": null,
+          "paused": false,
+          "turn": "2:6",
+          "last": {
+            "word": "bridge",
+            "guesser": 0,
+            "points": 1
+          },
+          "winners": [
+            0
+          ]
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-over-player",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 32,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "over",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "44444444-1111-4111-8111-111111111111",
+              "name": "Dev",
+              "cat": 3
+            },
+            "yours": false,
+            "presence": "away"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 4,
+          "timer": 90,
+          "rounds": 2,
+          "phase": "over",
+          "round": 2,
+          "drawer": null,
+          "order": [
+            0,
+            1,
+            2
+          ],
+          "scores": [
+            6,
+            3,
+            3,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "group": null,
+          "level": null,
+          "remainingMs": null,
+          "paused": false,
+          "turn": "2:6",
+          "last": {
+            "word": "bridge",
+            "guesser": 0,
+            "points": 1
+          },
+          "winners": [
+            0
+          ]
+        },
+        "options": {
+          "timer": 90
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-over-left",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 5,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "over",
+        "youAreHost": true,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 2,
+          "timer": 60,
+          "rounds": 2,
+          "phase": "over",
+          "round": 1,
+          "drawer": null,
+          "order": [
+            0
+          ],
+          "scores": [
+            0,
+            0
+          ],
+          "out": [
+            false,
+            true
+          ],
+          "group": null,
+          "level": null,
+          "remainingMs": null,
+          "paused": false,
+          "turn": "1:0",
+          "last": null,
+          "winners": [
+            0
+          ]
+        },
+        "options": {
+          "timer": 60
+        },
+        "screen": true
+      }
+    }
+  },
+  {
+    "name": "snapshot-over-stalled",
+    "message": {
+      "t": "snapshot",
+      "protocol": 1,
+      "seq": 11,
+      "room": {
+        "code": "BCDFG",
+        "name": "Game Night",
+        "status": "over",
+        "youAreHost": false,
+        "seats": [
+          {
+            "kind": "human",
+            "person": {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Alice",
+              "cat": 0
+            },
+            "yours": false,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "22222222-1111-4111-8111-111111111111",
+              "name": "Bob",
+              "cat": 1
+            },
+            "yours": true,
+            "presence": "awake"
+          },
+          {
+            "kind": "human",
+            "person": {
+              "id": "33333333-1111-4111-8111-111111111111",
+              "name": "Cleo",
+              "cat": 2
+            },
+            "yours": false,
+            "presence": "awake"
+          }
+        ],
+        "game": null,
+        "gameId": "purrtrait",
+        "purrtrait": {
+          "seats": 3,
+          "timer": 60,
+          "rounds": 2,
+          "phase": "over",
+          "round": 1,
+          "drawer": null,
+          "order": [
+            0,
+            1,
+            2
+          ],
+          "scores": [
+            1,
+            1,
+            0
+          ],
+          "out": [
+            false,
+            false,
+            false
+          ],
+          "group": null,
+          "level": null,
+          "remainingMs": null,
+          "paused": false,
+          "turn": "1:1",
+          "last": {
+            "word": "robot",
+            "guesser": 1,
+            "points": 1
+          },
+          "winners": [
+            0,
+            1
+          ]
+        },
+        "options": {
+          "timer": 60
+        }
+      }
+    }
+  },
+  {
+    "name": "event-turn",
+    "message": {
+      "t": "event",
+      "seq": 14,
+      "event": {
+        "kind": "purrtrait",
+        "event": {
+          "type": "turn",
+          "drawer": 1,
+          "round": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "event-chosen",
+    "message": {
+      "t": "event",
+      "seq": 10,
+      "event": {
+        "kind": "purrtrait",
+        "event": {
+          "type": "chosen",
+          "drawer": 0,
+          "group": "outside",
+          "level": "tricky"
+        }
+      }
+    }
+  },
+  {
+    "name": "event-guessed",
+    "message": {
+      "t": "event",
+      "seq": 13,
+      "event": {
+        "kind": "purrtrait",
+        "event": {
+          "type": "guessed",
+          "drawer": 0,
+          "guesser": 2,
+          "points": 2,
+          "word": "thunder"
+        }
+      }
+    }
+  },
+  {
+    "name": "event-missed-time",
+    "message": {
+      "t": "event",
+      "seq": 16,
+      "event": {
+        "kind": "purrtrait",
+        "event": {
+          "type": "missed",
+          "drawer": 1,
+          "word": "eat",
+          "reason": "time"
+        }
+      }
+    }
+  },
+  {
+    "name": "event-missed-gaveUp",
+    "message": {
+      "t": "event",
+      "seq": 19,
+      "event": {
+        "kind": "purrtrait",
+        "event": {
+          "type": "missed",
+          "drawer": 2,
+          "word": "builder",
+          "reason": "gaveUp"
+        }
+      }
+    }
+  },
+  {
+    "name": "event-missed-left",
+    "message": {
+      "t": "event",
+      "seq": 22,
+      "event": {
+        "kind": "purrtrait",
+        "event": {
+          "type": "missed",
+          "drawer": 3,
+          "word": "cupcake",
+          "reason": "left"
+        }
+      }
+    }
+  },
+  {
+    "name": "event-over",
+    "message": {
+      "t": "event",
+      "seq": 32,
+      "event": {
+        "kind": "purrtrait",
+        "event": {
+          "type": "over",
+          "winners": [
+            0
+          ],
+          "scores": [
+            6,
+            3,
+            3,
+            0
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "ink",
+    "message": {
+      "t": "ink",
+      "seat": 0,
+      "turn": "1:0",
+      "ops": [
+        [
+          "s",
+          0,
+          0,
+          1,
+          384,
+          300,
+          40,
+          0,
+          30,
+          30,
+          0,
+          40,
+          -30,
+          30,
+          -40,
+          0,
+          -30,
+          -30,
+          0,
+          -40,
+          30,
+          -30
+        ]
+      ]
+    }
+  },
+  {
+    "name": "inkSync",
+    "message": {
+      "t": "inkSync",
+      "turn": "1:0",
+      "ops": [
+        [
+          "s",
+          0,
+          0,
+          1,
+          384,
+          300,
+          40,
+          0,
+          30,
+          30,
+          0,
+          40,
+          -30,
+          30,
+          -40,
+          0,
+          -30,
+          -30,
+          0,
+          -40,
+          30,
+          -30,
+          2,
+          2
+        ],
+        [
+          "s",
+          1,
+          0,
+          1,
+          340,
+          280,
+          -20,
+          -40,
+          -10,
+          40
+        ],
+        [
+          "s",
+          2,
+          0,
+          1,
+          430,
+          280,
+          20,
+          -40,
+          10,
+          40
+        ]
+      ]
+    }
+  },
+  {
+    "name": "inkResend",
+    "message": {
+      "t": "inkResend",
+      "turn": "1:0"
+    }
+  },
+  {
+    "name": "error-easel_full",
+    "message": {
+      "t": "error",
+      "code": "easel_full"
+    }
+  },
+  {
+    "name": "error-not_near",
+    "message": {
+      "t": "error",
+      "code": "not_near"
+    }
+  },
+  {
+    "name": "error-removed",
+    "message": {
+      "t": "error",
+      "code": "removed"
+    }
+  },
+  {
+    "name": "error-no_screen",
+    "message": {
+      "t": "error",
+      "code": "no_screen"
+    }
+  },
+  {
+    "name": "error-not_allowed",
+    "message": {
+      "t": "error",
+      "code": "not_allowed"
+    }
+  },
+  {
+    "name": "error-not_enough_players",
+    "message": {
+      "t": "error",
+      "code": "not_enough_players"
+    }
+  },
+  {
+    "name": "error-bad_seat",
+    "message": {
+      "t": "error",
+      "code": "bad_seat"
+    }
+  },
+  {
+    "name": "error-bad_message",
+    "message": {
+      "t": "error",
+      "code": "bad_message"
+    }
+  },
+  {
+    "name": "error-wrong_phase",
+    "message": {
+      "t": "error",
+      "code": "wrong_phase"
+    }
+  },
+  {
+    "name": "error-not_your_turn",
+    "message": {
+      "t": "error",
+      "code": "not_your_turn"
+    }
+  },
+  {
+    "name": "error-game_over",
+    "message": {
+      "t": "error",
+      "code": "game_over"
+    }
+  },
+  {
+    "name": "error-game_off",
+    "message": {
+      "t": "error",
+      "code": "game_off"
+    }
+  }
+]

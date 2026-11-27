@@ -55,7 +55,7 @@ export function Lobby(props: {
   const words = startWords(room);
   const game = room.gameId ?? "cat-tower";
   const bird = game === "birdwatch";
-  const rules = room.options?.rules ?? "official";
+  const rules = room.options && "rules" in room.options ? room.options.rules : "official";
   // Toy Tumble: one seat per device, and the House Cats' level once a cat is seated.
   const tumble = isTumble(room);
   const cats = catsOf(room);

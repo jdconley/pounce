@@ -1,5 +1,5 @@
 import { olderThan } from "../app/version";
-import { DEFAULT_GAME, gameTitle, isGameId } from "../games";
+import { DEFAULT_GAME, gameTitle, isGameId, sameRoomGame } from "../games";
 import { ROOM_CODE } from "../room/codes";
 
 import { CACHE, CSP, css, escapeHtml, shell } from "./layout";
@@ -8,13 +8,13 @@ import { MEDIA } from "./site-media";
 
 import type { InvitePeek } from "../safety/safety";
 
-const association = (pounces: boolean, tv: boolean) =>
+const association = (pounces: boolean, tv: boolean, easel: boolean) =>
   JSON.stringify({
     applinks: {
       details: [
         {
           appIDs: ["B222J9J7B8.com.conleychaos.play"],
-          components: [{ "/": "/j/*" }, ...(pounces ? [{ "/": "/p/*" }] : []), ...(tv ? [{ "/": "/tv/*" }] : [])],
+          components: [{ "/": "/j/*" }, ...(pounces ? [{ "/": "/p/*" }] : []), ...(tv ? [{ "/": "/tv/*" }] : []), ...(easel ? [{ "/": "/e/*" }] : [])],
         },
       ],
     },
@@ -36,6 +36,7 @@ const STYLE = css(`
 .game.cat-tower{background:var(--violet);color:#fff}
 .game.tiles{background:var(--sky);color:var(--ink)}
 .game.birdwatch{background:var(--lime);color:var(--ink)}
+.game.purrtrait{background:var(--magenta);color:var(--ink)}
 .table{margin:4px auto 0;color:var(--muted);font-weight:700;overflow-wrap:anywhere}
 .go{display:block;margin:20px 0 0;padding:15px 20px;border:3px solid var(--ink);border-radius:999px;background:linear-gradient(#FFC21A,#FF8A00);box-shadow:0 6px 0 var(--ink);color:var(--ink);font-family:var(--round);font-size:1.35rem;font-weight:900;text-decoration:none}
 .go:active{transform:translateY(4px);box-shadow:0 2px 0 var(--ink)}
@@ -67,10 +68,11 @@ export const INVITE_CSP = `default-src 'none'; style-src 'unsafe-inline'; img-sr
 /**
  * Apple fetches this to bind `/j/*` links on our domain to the app: with pushes on, `/p/*` pounce
  * links too, and with `TV` on, `/tv/*` TV links (docs/tv-protocol.md). With `TV` off a `/tv/` link
- * is a 404, so the app doesn't claim it.
+ * is a 404, so the app doesn't claim it. `easel`: Purrtrait's TV QR links, `/e/*`, once an App
+ * Store version draws the game (`PURRTRAIT_APPLINKS`); until then they open the web player.
  */
-export function appSiteAssociation(pounces = false, tv = false): Response {
-  return new Response(association(pounces, tv), {
+export function appSiteAssociation(pounces = false, tv = false, easel = false): Response {
+  return new Response(association(pounces, tv, easel), {
     headers: { "content-type": "application/json", "cache-control": CACHE },
   });
 }
@@ -303,6 +305,8 @@ export function pouncePage(
 export function sharePage(code: string, install: Install, origin: string, peek: InvitePeek | "gone" | "hidden" = "hidden", newest = false): Response {
   if (!ROOM_CODE.test(code) || peek === "gone") return deadLinkPage(install);
   const known = peek === "hidden" ? null : peek;
+  // A same-room table is joined only from its TV's code (Purrtrait, design §5.1): no way in here.
+  if (known && sameRoomGame(known.game)) return scanPage();
   const url = `${origin}/j/${code}`;
   const host = known?.host ?? null;
   const game = known?.game ?? DEFAULT_GAME;
@@ -327,6 +331,17 @@ export function sharePage(code: string, install: Install, origin: string, peek: 
       .join("\n"),
   });
   return new Response(html, { headers: { ...HTML, "content-security-policy": INVITE_CSP } });
+}
+
+/**
+ * A Purrtrait table's links that can't let anyone in: `/j/<code>`, and `/e/<code>` without a live
+ * near key (design §5.1). Only the TV's own QR, fresh, is a way in, so the page names nobody and
+ * offers no button, no code and no store. Never cached and never indexed, like the invite pages.
+ */
+export function scanPage(): Response {
+  const title = "Scan the code on the TV.";
+  const html = page({ title, body: [CAT, `<h1>${title}</h1>`, gameChip("purrtrait")].join("\n") });
+  return new Response(html, { headers: { ...HTML, "content-security-policy": CSP } });
 }
 
 /**

@@ -7,7 +7,7 @@ import { CATALOG, GAME_IDS, RULE_NAMES, SHELF, rulesLine, titleOf } from "../src
 import { RULE_COPY } from "../src/table/bw-model";
 
 /** Games the server deals that this player doesn't draw yet: each leaves the list when its web table lands. */
-const NOT_YET: readonly string[] = [];
+const NOT_YET: readonly string[] = ["purrtrait"];
 
 describe("Home's game shelf", () => {
   test("names and seats every game the server has, exactly as the server does", () => {
