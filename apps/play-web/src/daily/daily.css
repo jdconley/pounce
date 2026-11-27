@@ -336,6 +336,12 @@
   font: 900 1.05rem var(--round);
 }
 
+/* Ended without finishing ("18%"): no tick, and the dim pill the board's rows use. */
+.dd-mine.unfinished {
+  background: rgba(27, 11, 58, 0.55);
+  color: var(--white);
+}
+
 .dd-board-wrap {
   padding: 14px 12px 12px;
 }

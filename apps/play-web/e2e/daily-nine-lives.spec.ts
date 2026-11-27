@@ -79,6 +79,19 @@ test("Nine Lives: three wrong numbers fill in the solution, Out of lives", async
   await page.reload();
   await expect(page.getByRole("heading", { name: "Out of lives" })).toBeVisible();
   await expect.poll(async () => (await readBoard(page)).filter((c) => c.answer).length).toBe(open.length);
+
+  // The Dish card: how far it got, plain, with no tick (a tick is for a finished run).
+  await page.locator(".dd-end").getByRole("button", { name: "Dish", exact: true }).click();
+  const mine = page.getByRole("button", { name: /^Nine Lives: Out of lives, \d+%\. Result$/ });
+  await expect(mine).toBeVisible();
+  await expect(mine).toHaveText(/^\d+%$/);
+  await expect(mine.locator(".dd-tick")).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath("nine-lives-dish-out-of-lives.png") });
+  // Home's Today tile: the same, no tick.
+  await page.getByRole("button", { name: "Home" }).first().click();
+  const tile = page.locator(".dd-tile", { hasText: "Nine Lives" });
+  await expect(tile.locator(".dd-tile-sub")).toHaveText(/^\d+%$/);
+  await expect(tile.locator(".dd-tick")).toHaveCount(0);
   await closeAll(otto.context);
 });
 
