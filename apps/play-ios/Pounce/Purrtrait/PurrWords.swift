@@ -126,6 +126,11 @@ struct PurrClock: View {
     var size: CGFloat = 22
 
     var body: some View {
+        // No clock from the room (a phase without one): nothing, rather than a wrong 0:00.
+        if deadline != nil || frozen != nil { clock }
+    }
+
+    private var clock: some View {
         TimelineView(.periodic(from: .now, by: 0.25)) { context in
             let left = seconds(at: context.date)
             OutlinedText(PurrWords.clock(left), size: size, fill: left <= 10 ? Palette.yellow : .white, width: size * 0.12)

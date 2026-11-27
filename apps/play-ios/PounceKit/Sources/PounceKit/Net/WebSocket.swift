@@ -90,6 +90,11 @@ public struct URLSessionWebSocketConnector: WebSocketConnector {
         do {
             try await connection.handshake()
         } catch {
+            // The handshake's ping can fail before the refused upgrade's response is on the task:
+            // give it a moment, so a 403 or 404 is read as one and not as a dropped connection.
+            for _ in 0..<10 where task.response == nil && !(error is CancellationError) {
+                try? await Task.sleep(for: .milliseconds(30))
+            }
             let response = task.response as? HTTPURLResponse
             let status = response?.statusCode
             task.cancel()

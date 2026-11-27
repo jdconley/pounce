@@ -89,7 +89,8 @@ struct GameCard: View {
             try? await Task.sleep(for: Pace.duration(.milliseconds(2600)))
             if !Task.isCancelled { noteShown = false }
         }
-        .overlay(alignment: .topTrailing) { if marked { sticker } }
+        // A ticket has no room for the TV mark: the sticker says it there.
+        .overlay(alignment: .topTrailing) { if soon || (onTV && shownLayout == .ticket) { sticker } }
         .animation(.spring(duration: 0.35, bounce: 0.35).paced, value: noteShown)
     }
 
@@ -150,7 +151,20 @@ struct GameCard: View {
 
         return Group {
             if onTV {
-                words.frame(maxWidth: .infinity, alignment: .leading)
+                // Where a playable card has Play: where this one starts.
+                if shownLayout == .poster, playUnder || bigType {
+                    VStack(alignment: .leading, spacing: 12) {
+                        words.frame(maxWidth: .infinity, alignment: .leading)
+                        OnTVMark(roomy: roomy, wide: true)
+                    }
+                } else if shownLayout == .poster {
+                    HStack(alignment: .center, spacing: 10) {
+                        words.frame(maxWidth: .infinity, alignment: .leading)
+                        OnTVMark(roomy: roomy, wide: false)
+                    }
+                } else {
+                    words.frame(maxWidth: .infinity, alignment: .leading)
+                }
             } else if soon {
                 if shownLayout == .poster, playUnder || bigType {
                     // Where a playable card has its play mark, so a row of posters lines up.
@@ -378,6 +392,28 @@ private struct PlayMark: View {
 
 /// Where the play mark would be on a game that is on its way: a flat, sunken bar with a padlock.
 /// Nothing to press; the sticker says "Coming soon".
+/// Where Play sits on a game only a TV starts: a TV and "Starts on the TV".
+private struct OnTVMark: View {
+    var roomy = false
+    var wide = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(ArtName.iconTV).resizable().scaledToFit().frame(width: roomy ? 30 : 26, height: roomy ? 30 : 26)
+            OutlinedText(GameCard.tvWords, size: roomy ? 20 : 16, width: 2.5, lines: 2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: wide ? .infinity : nil)
+        .frame(minHeight: 52)
+        .background(
+            Capsule().fill(LinearGradient(colors: [Palette.teal.mix(with: .white, by: 0.2), Palette.teal], startPoint: .top, endPoint: .bottom))
+                .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 4)))
+        .padding(.bottom, 5)
+        .accessibilityHidden(true)
+    }
+}
+
 private struct NotYetMark: View {
     var roomy = false
 

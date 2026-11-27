@@ -144,6 +144,10 @@ actor Device {
 
     private func handle(_ event: SocketEvent, gen: Int) {
         guard gen == generation else { return }
+        // `E2E_TRACE=1`: every socket event but the messages, for chasing a refused connect.
+        if ProcessInfo.processInfo.environment["E2E_TRACE"] != nil, !{ if case .message = event { true } else { false } }() {
+            log("[\(name)] socket \(event)")
+        }
         switch event {
         case .connecting, .disconnected:
             state.connected = false

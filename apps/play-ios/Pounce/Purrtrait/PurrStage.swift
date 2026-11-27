@@ -180,7 +180,9 @@ struct PurrStage: View {
                     store.actPurrtrait(seat: seat, .choose(level))
                 }
             }
-            .transition(.scale(scale: 0.9).combined(with: .opacity))
+            .compositingGroup()
+            // One screen at a time: the old one goes at once, so two never show through each other.
+            .transition(.asymmetric(insertion: .scale(scale: 0.9).combined(with: .opacity), removal: .identity))
         case .draw(_, let word):
             if let draw {
                 PurrDrawView(
@@ -199,15 +201,21 @@ struct PurrStage: View {
                         endStroke()
                         menuOpen = true
                     })
-                .transition(.opacity)
+                // One screen at a time: the old one goes at once, so two never show through each
+                // other. No compositing group here: the easel's layers draw straight to the screen.
+                .transition(.asymmetric(insertion: .opacity, removal: .identity))
             }
         case .watch:
             PurrWatchView(table: table)
-                .transition(.opacity)
+                .compositingGroup()
+                // One screen at a time: the old one goes at once, so two never show through each other.
+                .transition(.asymmetric(insertion: .opacity, removal: .identity))
         case .reveal(let last):
             PurrRevealView(table: table, last: last)
                 .id(table.view.turn)
-                .transition(.scale(scale: 0.8).combined(with: .opacity))
+                .compositingGroup()
+                // One screen at a time: the old one goes at once, so two never show through each other.
+                .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity), removal: .identity))
         case .over:
             Color.clear
         }

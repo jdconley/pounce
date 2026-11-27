@@ -100,6 +100,20 @@ import Testing
         await socket.stop()
     }
 
+    /// Purrtrait: a phone that brought a TV's key and got 403 stops, and says it wasn't near.
+    @Test func aPhoneWithAKeyThatIsRefusedStops() async throws {
+        let connector = FakeConnector([.failure(.forbidden), .connection(FakeConnection())])
+        let sleeper = FakeSleeper()
+        let credential = credential
+        let socket = RoomSocket(
+            code: "BCDFG", config: config, near: "ZZZZZZZZ", credential: { credential }, connector: connector,
+            tick: sleeper.pingInterval, sleep: { try await sleeper.sleep($0) })
+        var reader = EventReader(socket.events)
+        await socket.start()
+        #expect(await reader.next(2) == [.connecting, .forbidden(.notNear)])
+        #expect(connector.calls.count == 1, "no reconnect")
+    }
+
     @Test func notScreenAfterADropIsStillTerminal() async throws {
         // Linked once, then the room stops listing the TV (a new table, or it was unlinked).
         let first = FakeConnection()
