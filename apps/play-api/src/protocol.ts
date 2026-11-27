@@ -4,6 +4,7 @@ import { ROOM_CODE_ALPHABET } from "./room/codes";
 import { parseRoomName } from "./room/names";
 import { hasKeys, isInt, isObj, type Obj } from "./shape";
 import { isBack, isRug } from "./streaks/catalog";
+import { parseTumble, type TumbleClient } from "./tumble/wire";
 
 import type { BirdEvent } from "./birdwatch/engine";
 import type { BirdView } from "./birdwatch/view";
@@ -159,7 +160,9 @@ export type ClientMessage =
    */
   | { t: "retire"; seat: Seat }
   /** Where `seat` is pointing, for a screen. No `aim` clears it. */
-  | { t: "aim"; seat: Seat; aim?: GameAim };
+  | { t: "aim"; seat: Seat; aim?: GameAim }
+  /** Toy Tumble's live events for the device's own box (`tumble/wire.ts`, `docs/live-protocol.md`). */
+  | TumbleClient;
 
 /** Every `error` code the server sends. */
 export type ErrorCode =
@@ -348,6 +351,8 @@ function parseObject(o: Obj, parsers: Parsers): ClientMessage | BadMessage | nul
     case "link":
       if (!hasKeys(o, ["t", "state"]) || (o.state !== "weak" && o.state !== "good")) return null;
       return { t: "link", state: o.state };
+    case "tumble":
+      return parseTumble(o);
     default:
       return null;
   }
