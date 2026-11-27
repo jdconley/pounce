@@ -82,7 +82,7 @@ describe("creating a Birdwatch table", { timeout: 30_000 }, () => {
       ((await (await call(mf, phone, "GET", "/v1/devices/me/tables", undefined, NEW_APP)).json()) as { tables: TableEntry[] }).tables.find((t) => t.code === code);
     expect(await eventually(entry, (t) => t?.seats?.[0]?.kind === "human")).toMatchObject({ game: "birdwatch", options: { rules: "official" } });
     me.send({ t: "setOptions", options: { rules: "friesen" } });
-    expect(await eventually(entry, (t) => t?.options?.rules === "friesen")).toMatchObject({ game: "birdwatch", status: "lobby" });
+    expect(await eventually(entry, (t) => t?.options !== undefined && "rules" in t.options && t.options.rules === "friesen")).toMatchObject({ game: "birdwatch", status: "lobby" });
   });
 });
 
@@ -97,7 +97,7 @@ describe("a Birdwatch hand through the room's sockets", { timeout: 120_000 }, ()
     me.send({ t: "setOptions", options: { rules: "tucker" } });
     for (const seat of [1, 2, 3]) me.send({ t: "configure", seat, kind: "bot" });
     me.send({ t: "swapSeats", seats: [0, 2] });
-    await me.until((s) => s.room.options?.rules === "tucker" && s.room.seats[2]?.kind === "human" && s.room.seats[0]?.kind === "bot");
+    await me.until((s) => s.room.options !== undefined && "rules" in s.room.options && s.room.options.rules === "tucker" && s.room.seats[2]?.kind === "human" && s.room.seats[0]?.kind === "bot");
     me.send({ t: "start" });
     await me.until((s) => s.room.status === "playing" && s.room.birdwatch !== undefined);
 

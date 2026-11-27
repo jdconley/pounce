@@ -36,10 +36,10 @@ describe("GAMES in production", () => {
     expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles", "birdwatch"]);
   });
 
-  it("is on for local dev, in the example .dev.vars, with Birdwatch too", () => {
+  it("is on for local dev, in the example .dev.vars, with Birdwatch and Purrtrait too", () => {
     const vars = readFileSync(new URL("../.dev.vars.example", import.meta.url), "utf8");
     const value = /^GAMES=(.*)$/m.exec(vars)?.[1];
-    expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles", "birdwatch"]);
+    expect(gamesOn({ GAMES: value })).toEqual(["cat-tower", "tiles", "birdwatch", "purrtrait"]);
   });
 });
 

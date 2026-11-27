@@ -59,7 +59,7 @@ describe("Birdwatch samples through the store", () => {
       sockets[0]!.receive(s.message);
       const room = store.state.room!;
       expect(room.gameId, s.name).toBe("birdwatch");
-      expect(room.options?.rules, s.name).toMatch(/^(official|tucker|friesen)$/);
+      expect((room.options as { rules?: string } | undefined)?.rules, s.name).toMatch(/^(official|tucker|friesen)$/);
       if (room.status === "lobby") expect(room.birdwatch).toBeUndefined();
       else expect(room.birdwatch?.teams.length, s.name).toBeGreaterThan(0);
       store.stop();

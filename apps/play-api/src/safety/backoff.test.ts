@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DEVICE_JOIN_RULE, IP_JOIN_RULE, lockedUntil, miss, take, type Misses } from "./backoff";
+import { DEVICE_JOIN_RULE, ipBucket, IP_JOIN_RULE, lockedUntil, miss, take, type Misses } from "./backoff";
 
 const rule = { free: 2, baseMs: 1000, maxMs: 8000, forgetMs: 60_000 };
 
@@ -53,5 +53,17 @@ describe("take", () => {
     expect(w).toEqual({ window: { count: 3, start: 0 }, ok: false });
     w = take(w.window, 1000, 2, 1000);
     expect(w).toEqual({ window: { count: 1, start: 1000 }, ok: true });
+  });
+});
+
+describe("ipBucket", () => {
+  it("IPv6 addresses count by their /64; IPv4 and anything else as they are", () => {
+    expect(ipBucket("2001:db8:1:2:aaaa::1")).toBe("2001:db8:1:2::/64");
+    expect(ipBucket("2001:0DB8:0001:0002:ffff:ffff:ffff:ffff")).toBe("2001:db8:1:2::/64");
+    expect(ipBucket("2001:db8::")).toBe("2001:db8:0:0::/64");
+    expect(ipBucket("::1")).toBe("0:0:0:0::/64");
+    expect(ipBucket("203.0.113.7")).toBe("203.0.113.7");
+    expect(ipBucket("::ffff:203.0.113.7")).toBe("::ffff:203.0.113.7");
+    for (const odd of ["unknown", "1::2::3", "1:2:3:4:5:6:7:8:9", "1:2:3", "g::1", "1:2:3:4:5:6:7::8"]) expect(ipBucket(odd)).toBe(odd);
   });
 });

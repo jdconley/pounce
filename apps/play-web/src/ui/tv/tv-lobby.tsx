@@ -73,7 +73,7 @@ export function TvLobby(props: { room: RoomView; live: boolean; onChangeGame: (b
         <header class={`tv-lobby-head ${game}`}>
           <img class="tv-lobby-art" src={art(CATALOG[game].art)} alt="" width={768} height={512} decoding="async" />
           <h1 class="tv-lobby-title outlined">{CATALOG[game].title}</h1>
-          {game === "birdwatch" && room.options ? <p class="tv-lobby-rules outlined">{RULE_COPY[room.options.rules].name}</p> : null}
+          {game === "birdwatch" && room.options && "rules" in room.options ? <p class="tv-lobby-rules outlined">{RULE_COPY[room.options.rules].name}</p> : null}
         </header>
         <div class="tv-lobby-rug">
           <img class="tv-lobby-rug-art" src={art("rug")} alt="" />

@@ -26,3 +26,26 @@ export function newRoomCode(rng: Rng): string {
 export function newMoveCode(rng: Rng): string {
   return randomCode(rng, MOVE_CODE_LENGTH);
 }
+
+const NEAR_KEY_LENGTH = 8;
+/** A typed near code is the room code and this many of the key's first characters: 8 in all. */
+const NEAR_TYPED_EXTRA = NEAR_KEY_LENGTH - ROOM_CODE_LENGTH;
+
+/** A well-formed near key, or typed near code: 8 characters from the alphabet (Purrtrait, design §5.2). */
+export const NEAR = new RegExp(`^[${ROOM_CODE_ALPHABET}]{${NEAR_KEY_LENGTH}}$`);
+
+/** A near key or typed near code as a query gave it, in any case: upper-cased, or null when it is no such thing. */
+export function parseNear(raw: string | null | undefined): string | null {
+  const near = raw?.toUpperCase() ?? null;
+  return near !== null && NEAR.test(near) ? near : null;
+}
+
+/** An 8-character near key: what a Purrtrait TV's QR carries, changed every 30 seconds. */
+export function newNearKey(rng: Rng): string {
+  return randomCode(rng, NEAR_KEY_LENGTH);
+}
+
+/** What a phone types in place of the QR: the room code, then the key's first characters. */
+export function typedNear(code: string, key: string): string {
+  return `${code}${key.slice(0, NEAR_TYPED_EXTRA)}`;
+}

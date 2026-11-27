@@ -1,6 +1,6 @@
 # Pounce data retention policy
 
-Draft for JD Conley (Conley Chaos LLC) to review, 4 November 2026; updated 10 November 2026 to match the code before the App Store launch, and 13 November 2026 for the first-run funnel (needs legal review). Written to meet the written-retention requirement of the amended COPPA Rule, 16 CFR § 312.10, and the retention rules in the daily habit design (`docs/superpowers/specs/2026-11-04-daily-habit-design.md` §14, §14.1). This is not legal advice. The public summary is the privacy page served by `apps/play-api/src/http/privacy.ts` at `play.conleychaos.com/privacy`, and the App Store Connect answers are in `docs/privacy/app-store-label.md`; keep all three in step.
+Draft for JD Conley (Conley Chaos LLC) to review, 4 November 2026; updated 10 November 2026 to match the code before the App Store launch, 13 November 2026 for the first-run funnel (needs legal review), and 26 November 2026 for Purrtrait's drawings. Written to meet the written-retention requirement of the amended COPPA Rule, 16 CFR § 312.10, and the retention rules in the daily habit design (`docs/superpowers/specs/2026-11-04-daily-habit-design.md` §14, §14.1). This is not legal advice. The public summary is the privacy page served by `apps/play-api/src/http/privacy.ts` at `play.conleychaos.com/privacy`, and the App Store Connect answers are in `docs/privacy/app-store-label.md`; keep all three in step.
 
 ## Principles
 
@@ -21,6 +21,7 @@ The web player (`apps/play-web`, at `play.conleychaos.com/play`, from 15 Novembe
 | Name and cat | `Player` DO meta; seats in `GameRoom`; table lists in other players' `Player` and `DeviceIndex` | Shown to people at the same table, and in their notifications (through APNs) | With the player; seats with the room | Account deletion; guest expiry; room close. Deletion removes the player id from every seat but leaves the seated name and cat until the room closes (7 days after its last activity). |
 | Table names players type | `GameRoom`, table lists | Shown to the table | With the room | Room close, 7 days after its last activity (`CLEANUP_AFTER_MS`). |
 | Game rooms: seats, turns, game state, nudges | `GameRoom` DO | Playing | 7 days after the last activity | `GameRoom.close` deletes all of it. |
+| Drawings in Purrtrait (the drawer's strokes, "ink") | `GameRoom` memory only (`RoomCore`, through `src/room/live-relay.ts`); never Durable Object storage | Showing the drawing on the table's one TV as it is drawn, and again on that TV or the drawer's phone if it reconnects mid-turn | In memory only, until the turn ends | Dropped from memory when the turn changes, the game ends, or the room leaves memory. Never written to storage, the alarm, logs, reports, analytics or backups, and never sent to another phone (`tests/purrtrait.test.ts` reads every stored key after a full game). A game's words are kept as ids in its game state; a word shows as text only once it is revealed. |
 | Age band (`kitten`, `teen`, `adult`) | `Player` and `DeviceIndex` | Age limits and safety defaults (§14.1) | With the player | With the player. The birth year typed on the age keypad is never stored: the app turns it into a band on the device and discards it at once (FTC policy statement, February 2026). |
 | Time zone | `DeviceIndex`, `Player`, `Pair` | The day boundary for streaks | While the device is in use | Replaced by every profile upload. The `DeviceIndex` record has no expiry of its own (see open items). |
 | APNs push, widget and Live Activity tokens | `DeviceIndex` | "Your move" notifications, widget refresh, the live table | Until APNs reports it dead or the app uploads a new one. They belong to the device, so deleting a player leaves them for the device's next player | Forgotten on a 410 or `BadDeviceToken`. For a kitten, kept only with a parent's consent (PR 9), and deleted from all of the kitten's devices the moment consent ends. |
@@ -58,6 +59,7 @@ The web player (`apps/play-web`, at `play.conleychaos.com/play`, from 15 Novembe
 ## Logs
 
 - Worker invocation logs are off (`wrangler.jsonc`). Error logs carry event names and error codes: no player ids, pair ids, tokens, names or phone numbers. A few room errors log the room code (`game-room.ts`).
+- Purrtrait's drawings are never logged.
 - The device-mint rate limit keeps client IP addresses in memory for a minute or so; they are never stored.
 - Cloudflare's own platform logs follow Cloudflare's retention; we keep no copy.
 

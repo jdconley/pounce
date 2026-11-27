@@ -16,7 +16,8 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <li><strong>A device id</strong> made by our server the first time the app runs, so your phone can rejoin its tables.</li>
 <li><strong>Your name and cat</strong> as you choose them in the app, shown to the people at your tables and in the notifications they get. The same for anyone else you add to your phone for pass-and-play, and the names you give your tables.</li>
 <li><strong>Games:</strong> your seats, turns, tables, the tables you archived, which tips you have seen, and your settings.</li>
-<li><strong>Your device's time zone</strong>, so a day ends at your midnight. We never collect your location.</li>
+<!--purrtrait--><li><strong>Drawings in Purrtrait</strong> go from the drawer's phone to the table's TV through our server, which keeps them only until the turn ends. They are never saved, shown on another phone, or shared.</li>
+<!--/purrtrait--><li><strong>Your device's time zone</strong>, so a day ends at your midnight. We never collect your location.</li>
 <li><strong>An age band</strong> (under 13, 13 to 17, or 18 and over). The app works it out on your device; we never see or keep a birth date.</li>
 <li><strong>Push tokens</strong>, if you allow notifications, so we can tell you when it's your move, update the widget and show a game on the Lock Screen.</li>
 <li><strong>Streaks:</strong> the days you and another player both played, the days you played, lifetime counts and rewards, and, for players 13 and over, a count of the times of day you usually play, so reminders come at a good time.</li>
@@ -90,7 +91,8 @@ const BODY = `<h1>Pounce privacy policy</h1>
 <li>the getting-started steps above, which say nothing about who the child is, used only to make the game easier to start.</li>
 </ul>
 <p>For a player under 13 there are no push notifications from our server, no sign-in, no invite links sent out, and no record of play times. The only reminders are ones the phone schedules for itself, and they start off.</p>
-<!--consent--><h2>With a parent's consent</h2>
+<!--purrtrait--><p>A child's drawings show only on the table's TV and are gone when the turn ends.</p>
+<!--/purrtrait--><!--consent--><h2>With a parent's consent</h2>
 <p>A parent or guardian who is signed in to Pounce can allow notifications on a child's own device. The child's device shows a six-digit code; the parent enters it on their own device, reads our <a href="/privacy/kitten-notice">notice to parents</a>, and gives their mobile number. Twilio Verify, our verification provider, texts that number a six-digit code, and the parent types it into Pounce to confirm. A day or so later, Pounce sends a notification to the parent's own device saying what they allowed, with a Revoke button; if none of their devices can get it within a day, consent ends. With that consent we also keep:</p>
 <ul>
 <li>the child's device's push token, used only to tell it when it's the child's move at a table where everyone else is approved, and when an approved person asks the child to play;</li>
@@ -120,14 +122,22 @@ const withoutConsent = (html: string) => html.replace(/<!--consent-->[\s\S]*?<!-
 /** With the Daily Dish (`DAILY` on) the policy says what it keeps and who sees it; off, nothing of it. */
 const withDaily = (html: string) => html.replace(/<!--\/?daily-->/g, "");
 const withoutDaily = (html: string) => html.replace(/<!--daily-->[\s\S]*?<!--\/daily-->/g, "");
-const PAGES = {
-  consent: { daily: withConsent(withDaily(HTML)), plain: withConsent(withoutDaily(HTML)) },
-  plain: { daily: withoutConsent(withDaily(HTML)), plain: withoutConsent(withoutDaily(HTML)) },
-};
+/** While Purrtrait tables can be dealt, the policy says what happens to a drawing (design §8.2); otherwise nothing of it. */
+const withPurrtrait = (html: string) => html.replace(/<!--\/?purrtrait-->/g, "");
+const withoutPurrtrait = (html: string) => html.replace(/<!--purrtrait-->[\s\S]*?<!--\/purrtrait-->/g, "");
+const PAGES = new Map<string, string>();
+for (const consent of [true, false]) {
+  for (const daily of [true, false]) {
+    for (const purrtrait of [true, false]) {
+      const page = (consent ? withConsent : withoutConsent)((daily ? withDaily : withoutDaily)((purrtrait ? withPurrtrait : withoutPurrtrait)(HTML)));
+      PAGES.set(`${consent}/${daily}/${purrtrait}`, page);
+    }
+  }
+}
 
 /** The privacy policy page; public, static, no scripts. */
-export function privacyPage(consent = true, daily = false): Response {
-  return new Response(PAGES[consent ? "consent" : "plain"][daily ? "daily" : "plain"], {
+export function privacyPage(consent = true, daily = false, purrtrait = false): Response {
+  return new Response(PAGES.get(`${consent}/${daily}/${purrtrait}`), {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": CACHE, "content-security-policy": CSP },
   });
 }

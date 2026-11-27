@@ -65,15 +65,22 @@ Room messages (Purrtrait rooms only; anything else is answered `not_allowed`):
 ```jsonc
 // client → server
 { "t": "ink", "seat": 3, "turn": "2:5", "ops": [["s",0,0,1,384,210,3,-1],["p",0,2,2],["u",0],["c"]] }
+{ "t": "ink", "seat": 3, "turn": "2:5", "ops": [["c"], ...], "last": true }   // the last message of a resend reply
 { "t": "remove", "seat": 4 }                       // host only
 // server → client (no seq; never in a snapshot)
-{ "t": "ink", "seat": 3, "turn": "2:5", "ops": [...] }          // to the screen, and the drawer's other sockets
+{ "t": "ink", "seat": 3, "turn": "2:5", "ops": [...] }          // to the screen, and the drawer's other sockets (never `last`)
 { "t": "inkSync", "turn": "2:5", "ops": [...] }                 // after a screen's or the drawer's snapshot
 { "t": "inkResend", "turn": "2:5" }                             // to the drawer's device after a wake
 { "t": "error", "code": "easel_full" | "not_near" | "removed" }
 ```
 
-Snapshot additions: `room.gameId: "purrtrait"`, `room.purrtrait: PurrView`, `room.options: { timer }`, and for the screen only `room.near: { key: string, code: string, expiresIn: number }` (`key` 8 chars, `code` = room code + first 2 chars of key). Socket: `GET /v1/rooms/{code}/ws?near=<KEY>`, or `near=<8-char typed code>`. Refusal: 403 `{ "error": "not_near" }` (close 4403), 403 `{ "error": "removed" }` (close 4403). The TV's QR: `https://play.conleychaos.com/e/<CODE>?near=<KEY>`.
+Client rules for ink:
+- **inkSync replaces.** On `inkSync`, drop whatever is on the easel for that turn and draw its `ops`. It has no `["c"]`, and undone strokes are already gone. It may come with `ops: []`.
+- **inkSync and inkResend reach every socket of the drawer's device**, not only the one that just connected. A socket that already shows the drawing gets the same drawing again. It replaces, so nothing changes. Answer `inkResend` from one socket only: the one that is drawing.
+- **The resend reply.** Answer `inkResend` with the whole easel. The first message starts with `["c"]` and carries your own stroke ids, which only have to go up. The final message carries `"last": true`, including when the reply is a single message. From the first message to the one marked last, the reply is exempt from the 25-a-second limit, once, for up to 5 seconds. Until the reply's first message arrives, the room drops ink that doesn't start with `["c"]`.
+- **Send Clear on its own.** A batch that would take the easel past 500 strokes or 30 000 points is refused whole, with `easel_full`, even when it also holds a `["c"]`. After `easel_full`, send `["c"]` as its own message, then draw again.
+
+Snapshot additions: `room.gameId: "purrtrait"`, `room.purrtrait: PurrView`, `room.options: { timer }`, and for the screen only `room.near: { key: string, code: string, expiresIn: number }` (`key` 8 chars, `code` = the 5-character room code + the first 3 chars of the key, 8 in all). Socket: `GET /v1/rooms/{code}/ws?near=<KEY>`, or `near=<8-char typed code>`. Refusal: 403 `{ "error": "not_near" }` (close 4403), 403 `{ "error": "removed" }` (close 4403). The TV's QR: `https://play.conleychaos.com/e/<CODE>?near=<KEY>`.
 
 ## Rulings (where the spec leaves it open)
 

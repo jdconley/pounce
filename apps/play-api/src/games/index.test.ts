@@ -2,16 +2,18 @@ import { describe, expect, it, test } from "vitest";
 
 import { birdwatch } from "./birdwatch";
 import { catTower } from "./cat-tower";
+import { purrtrait } from "./purrtrait";
 import { tiles } from "./tiles";
 
 import { DEFAULT_GAME, GAMES, GAMES_HEADER, gameModule, gamesListed, gamesOn, gameTitle, isGameId } from "./index";
 
 describe("the games a room can hold", () => {
-  it("are Cat Tower, the tile game and Birdwatch, each under its own id", () => {
-    expect(Object.keys(GAMES)).toEqual(["cat-tower", "tiles", "birdwatch"]);
+  it("are Cat Tower, the tile game, Birdwatch and Purrtrait, each under its own id", () => {
+    expect(Object.keys(GAMES)).toEqual(["cat-tower", "tiles", "birdwatch", "purrtrait"]);
     expect(GAMES["cat-tower"]).toBe(catTower);
     expect(GAMES.tiles).toBe(tiles);
     expect(GAMES.birdwatch).toBe(birdwatch);
+    expect(GAMES.purrtrait).toBe(purrtrait);
     for (const [id, module] of Object.entries(GAMES)) expect(module.id).toBe(id);
     expect(DEFAULT_GAME).toBe("cat-tower");
   });
@@ -77,6 +79,7 @@ describe("a game's name, for an app that can't draw it", () => {
     expect(gameTitle("cat-tower")).toBe("Cat Tower");
     expect(gameTitle("tiles")).toBe("Tuna Tiles");
     expect(gameTitle("birdwatch")).toBe("Birdwatch");
+    expect(gameTitle("purrtrait")).toBe("Purrtrait");
   });
 
   test("a game this server has no name for is a newer game", () => {

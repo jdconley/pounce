@@ -109,13 +109,14 @@ The server can't prove where a device is. So the rules make the TV the only door
 - The room mints a near key every 30 seconds while a Purrtrait table is in the lobby or in a game: 8 random characters from the room-code alphabet. The current and the previous key are accepted, so a key is good for 30 to 60 seconds.
 - Only the screen's snapshot carries it: `room.near: { "key": "...", "expiresIn": ms }`. A phone's snapshot never does.
 - The TV's QR encodes `https://play.conleychaos.com/e/<CODE>?near=<KEY>` ("e" for easel), a path of its own, not `/j/`. Until the iPhone app draws Purrtrait, the site association doesn't list `/e/*`, so a phone with the app opens the web player and can play, instead of an app card that says the game isn't there yet. A server flag, `PURRTRAIT_APPLINKS`, adds `/e/*` to the association once that app version is live, as `TV_APPLINKS` did for `/tv/`. The app and the web player pass the key on as `near=<KEY>` on the room socket. **(call)**
-- The typed fallback is the room code plus the first 2 characters of the key, as 8 characters: `ABCDEF KQ`. It is accepted only within the same 60 seconds. Phones' "Join with code" takes 6 or 8 characters. **(call: a QR does almost all the joining; the 2 extra characters keep a read-aloud code alive for 30 to 60 seconds only)**
+- The typed fallback is the 5-character room code plus the first 3 characters of the key, as 8 characters: `ABCDE KQX`. It is accepted only within the same 60 seconds. Phones' "Join with code" takes 5 or 8 characters. **(call: a QR does almost all the joining; the 3 extra characters keep a read-aloud code alive for 30 to 60 seconds only)**
 - Wrong or stale keys count against the device on the room-code backoff (`DEVICE_JOIN_RULE`).
 
 ### 5.3 What this protects, honestly
 
 - **It stops:** a stranger or relative elsewhere joining from a link, a shared room code, an old screenshot, or a code read out over the phone more than a minute ago. It stops drawings from ever reaching a phone, a second TV or anyone outside the room.
 - **It doesn't stop:** someone in the room texting a fresh photo of the QR to a friend, who scans it within the minute. That friend gets a seat, but sees no drawings and can't type anything. On their turn they could draw on the family's TV. The host removes them from the seat menu, and they stay out (§10.2).
+- **It slows, but doesn't stop, guessing the typed code.** Someone who already has the room code, guessing from many devices and addresses, gets about 60 typed guesses per key lifetime (30 per key's 30 seconds before typing closes, over a key's 60) at 3 characters from the room-code alphabet. The prize is a seat that sees no drawing, and the host can remove it.
 - **Rejected: a same-network check.** Comparing the phone's public address with the TV's would lock out a guest on cellular data, misfire on IPv6 and carrier networks, and still prove nothing. **(call)**
 - **Rejected: Bluetooth, sound or other local proximity signals.** None works in a browser, and the Apple TV can't offer one to a phone without new permissions and pairing. **(call)**
 

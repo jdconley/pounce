@@ -72,7 +72,7 @@ Mine, open to JD's override.
 
 ### Task 4: Joining, shelf, lobby, remove
 
-**Files:** The `/e/<CODE>?near=` universal link and dev scheme, "Join with code" takes 6 or 8 characters, the shelf card "Starts on the TV" with a tip, lobby timer pills (host), the seat menu's Remove (host), `not_near` and `removed` state cards, Show on TV hidden at a Purrtrait table except the host's "new TV" path.
+**Files:** The `/e/<CODE>?near=` universal link and dev scheme, "Join with code" takes 5 or 8 characters, the shelf card "Starts on the TV" with a tip, lobby timer pills (host), the seat menu's Remove (host), `not_near` and `removed` state cards, Show on TV hidden at a Purrtrait table except the host's "new TV" path.
 - [ ] UI test against the local server: a stale key is refused; a removed phone stays out. Commit.
 
 ### Task 5: Apple TV

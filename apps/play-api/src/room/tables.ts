@@ -1,4 +1,4 @@
-import type { GameOptions } from "../games";
+import type { AnyGameOptions } from "../games";
 import type { Person, SeatKind } from "../protocol";
 
 /**
@@ -32,7 +32,7 @@ export type TableEntry = {
    * can say "Tucker rules". Absent for a game without any (Cat Tower, the tile game), whose rows
    * stay what they always were.
    */
-  options?: GameOptions;
+  options?: AnyGameOptions;
 };
 
 /** The game a table without a `game` plays. */
@@ -162,6 +162,6 @@ export function listTables(sql: SqlStorage): TableEntry[] {
       ...(row.seats === null ? {} : { seats: JSON.parse(row.seats) as TableSeat[] }),
       ...(row.moved_at === null ? {} : { movedAt: row.moved_at }),
       ...(row.game === null ? {} : { game: row.game }),
-      ...(row.options === null ? {} : { options: JSON.parse(row.options) as GameOptions }),
+      ...(row.options === null ? {} : { options: JSON.parse(row.options) as AnyGameOptions }),
     }));
 }

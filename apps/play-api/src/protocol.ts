@@ -1,5 +1,6 @@
 import { parseAction as parseCatTowerAction, parseAim as parseCatTowerAim } from "./games/cat-tower";
 import { nameAllowed } from "./names/filter";
+import { parseOps, type InkOp } from "./purrtrait/ink";
 import { ROOM_CODE_ALPHABET } from "./room/codes";
 import { parseRoomName } from "./room/names";
 import { hasKeys, isInt, isObj, type Obj } from "./shape";
@@ -8,7 +9,9 @@ import { parseTumble, type TumbleClient } from "./tumble/wire";
 
 import type { BirdEvent } from "./birdwatch/engine";
 import type { BirdView } from "./birdwatch/view";
-import type { GameAction, GameError, GameId, GameOptions } from "./games";
+import type { GameAction, GameError, GameId, AnyGameOptions } from "./games";
+import type { PurrEvent } from "./purrtrait/engine";
+import type { PurrView } from "./purrtrait/view";
 import type { GameEvent, Seat } from "./rules/engine";
 import type { CatTowerView } from "./rules/view";
 import type { StreakView } from "./streaks/pair-core";
@@ -75,11 +78,14 @@ export type RoomView = {
   tiles?: TilesView;
   /** Birdwatch's view, in a `birdwatch` room once it is dealt. */
   birdwatch?: BirdView;
+  /** Purrtrait's view, in a `purrtrait` room once it is dealt. */
+  purrtrait?: PurrView;
   /**
    * What the table chose in its lobby (`setOptions`), for a game that has a choice: Birdwatch's
-   * rule set. Absent at a table of a game with none, so Cat Tower and tile game snapshots never have it.
+   * `{ rules }` or Purrtrait's `{ timer }`.
+   * Absent at a table of a game with none, so Cat Tower and tile game snapshots never have it.
    */
-  options?: GameOptions;
+  options?: AnyGameOptions;
   /** The table's rug and card back (§9.4). Only while streaks are on. */
   look?: { rug: string; back: string };
   /** The code of the table "Play again" dealt (§10.4), once there is one. */
@@ -105,6 +111,12 @@ export type RoomView = {
   retire?: RetireView;
   /** With `TV` on: present only while a screen shows the table, or is within its grace. */
   screen?: true;
+  /**
+   * The screen's own snapshot only, at a same-room table (Purrtrait) in the lobby or a game: the
+   * key its QR carries (`/e/<code>?near=<key>`), the 8 characters a phone may type instead, and
+   * ms until the next key, which comes in a new snapshot. A phone's snapshot never has it.
+   */
+  near?: { key: string; code: string; expiresIn: number };
 };
 
 /** Where a Cat Tower player is pointing: a group laid on the table. */
@@ -125,6 +137,8 @@ export type RoomEvent =
   | { kind: "tiles"; event: TilesEvent }
   /** A Birdwatch event. */
   | { kind: "birdwatch"; event: BirdEvent }
+  /** A Purrtrait event. */
+  | { kind: "purrtrait"; event: PurrEvent }
   /** A House Cat took `seat` for the rest of the game: its person left, or was retired (Birdwatch). */
   | { kind: "houseCat"; seat: Seat }
   /** Someone at the table changed its look; `seat` is theirs, for the pill with their cat (§9.4). */
@@ -143,7 +157,7 @@ export type ClientMessage =
   | { t: "rename"; name: string }
   | { t: "renameSeat"; seat: Seat; name: string }
   /** The host sets the table's options in the lobby (Birdwatch's rule set). Errors: `not_allowed`, `not_lobby`. */
-  | { t: "setOptions"; options: GameOptions }
+  | { t: "setOptions"; options: AnyGameOptions }
   /** The host swaps two seats in the lobby, to choose teams. Errors: `not_allowed`, `not_lobby`, `bad_seat`. */
   | { t: "swapSeats"; seats: [Seat, Seat] }
   | { t: "rematch" }
@@ -161,6 +175,20 @@ export type ClientMessage =
   | { t: "retire"; seat: Seat }
   /** Where `seat` is pointing, for a screen. No `aim` clears it. */
   | { t: "aim"; seat: Seat; aim?: GameAim }
+  /**
+   * Purrtrait: the drawer's device's strokes for turn `turn` (design §6.2). Only the device that
+   * owns the drawing turn, while it draws: anyone else's is dropped. Never stored. Errors:
+   * `bad_message`, `easel_full` (once a turn), `not_allowed` at a table of another game.
+   * `last`: the final message of a reply to `inkResend` (the reply is exempt from the rate limit
+   * until it); never relayed.
+   */
+  | { t: "ink"; seat: Seat; turn: string; ops: InkOp[]; last?: true }
+  /**
+   * Purrtrait: the host takes `seat` from its person (design §10.2): in the lobby the seat opens,
+   * in a game it is skipped from then on. Its device and player stay out, Play again too. Errors:
+   * `not_allowed` (not the host, or a table of another game), `bad_seat`.
+   */
+  | { t: "remove"; seat: Seat }
   /** Toy Tumble's live events for the device's own box (`tumble/wire.ts`, `docs/live-protocol.md`). */
   | TumbleClient;
 
@@ -185,6 +213,11 @@ export type ErrorCode =
   | "not_your_seat"
   | "seats_open"
   | "not_enough_players"
+  // Purrtrait: a table with no screen showing it, a phone that is not near the TV, a device the host removed, a full easel.
+  | "no_screen"
+  | "not_near"
+  | "removed"
+  | "easel_full"
   // Moving a seat to another device.
   | "game_over"
   | "bad_code"
@@ -222,7 +255,13 @@ export type ServerMessage =
   /** To the devices of the person in `seat`: the person in `from` nudged them (no seq). */
   | { t: "nudged"; seat: Seat; from: Seat }
   /** Where `seat` is pointing; no `aim` means it stopped. Not a state change, so no seq. */
-  | { t: "aim"; seat: Seat; aim?: GameAim };
+  | { t: "aim"; seat: Seat; aim?: GameAim }
+  /** Purrtrait: the drawer's ink as it came, to the screen and the drawer's other sockets. No seq, never in a snapshot. */
+  | { t: "ink"; seat: Seat; turn: string; ops: InkOp[] }
+  /** Purrtrait: the turn's drawing so far, compacted, right after a screen's or the drawer's snapshot. */
+  | { t: "inkSync"; turn: string; ops: InkOp[] }
+  /** Purrtrait: to the drawer's device after the room lost the drawing: send it all again, starting with `["c"]`. */
+  | { t: "inkResend"; turn: string };
 
 export type BadMessage = { error: "bad_message" | "bad_name" };
 
@@ -232,6 +271,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MOVE_CODE_LENGTH = 6;
 const MAX_NAME = 20;
 const MAX_CAT = 7;
+/** A turn key as a view's `turn` has it (`"2:5"`): any short string, compared as it came. */
+const MAX_TURN = 32;
 /** A move id: what the app makes (a UUID), or anything short and plain. */
 const MOVE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -282,6 +323,7 @@ function parseObject(o: Obj, parsers: Parsers): ClientMessage | BadMessage | nul
       return { t: "presence", state: o.state };
     case "leave":
     case "moveSeat":
+    case "remove":
       if (!hasKeys(o, ["t", "seat"]) || !isInt(o.seat, 0)) return null;
       return { t: o.t, seat: o.seat };
     case "configure":
@@ -348,6 +390,15 @@ function parseObject(o: Obj, parsers: Parsers): ClientMessage | BadMessage | nul
       const aim = parseAim(o.aim);
       return aim ? { t: "aim", seat: o.seat, aim } : null;
     }
+    case "ink": {
+      if (!hasKeys(o, ["t", "seat", "turn", "ops"], ["last"]) || !isInt(o.seat, 0)) return null;
+      const { turn } = o;
+      if (typeof turn !== "string" || turn.length < 1 || turn.length > MAX_TURN) return null;
+      if ("last" in o && o.last !== true) return null;
+      const ops = parseOps(o.ops);
+      if (!ops) return null;
+      return o.last === true ? { t: "ink", seat: o.seat, turn, ops, last: true } : { t: "ink", seat: o.seat, turn, ops };
+    }
     case "link":
       if (!hasKeys(o, ["t", "state"]) || (o.state !== "weak" && o.state !== "good")) return null;
       return { t: "link", state: o.state };
@@ -365,7 +416,7 @@ export type ActionParser = (raw: unknown) => GameAction | null;
 export type AimParser = (raw: unknown) => GameAim | null;
 
 /** A game's own check of a `setOptions` message's `options` (`GameModule.parseOptions`). */
-export type OptionsParser = (raw: unknown) => GameOptions | null;
+export type OptionsParser = (raw: unknown) => AnyGameOptions | null;
 
 type Parsers = { parseAction: ActionParser; parseAim: AimParser; parseOptions: OptionsParser };
 

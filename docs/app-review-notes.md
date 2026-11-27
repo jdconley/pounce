@@ -47,6 +47,18 @@ Consent isn't needed to play. To test it, use one device as the child (a year un
 
 ---
 
+## Purrtrait (add once the build under review draws it)
+
+Purrtrait, the draw-and-guess game, is not in the notes above: it ships only once the app draws it
+and the server's `GAMES` flag lists `purrtrait`. Paste this after APPLE TV then. The notes above are
+at about 3,985 of 4,000 characters, and this is about 900, so the notes need cutting to make room.
+
+PURRTRAIT (draw and guess, needs a TV)
+Purrtrait starts on a TV: the Apple TV app, or play.conleychaos.com/play/tv in any browser. With one iPhone: open that page on a computer and pick Purrtrait; the TV shows a QR code and an 8-character code that change every 30 seconds. Scan the QR with the iPhone, or tap Join and type the code. For the second player, open play.conleychaos.com/play in another browser, type 1980 and a name, and join the same way. Tap Start. The drawer's phone shows a word; the drawing shows on the TV as it is drawn. Guesses are said out loud, and the drawer taps who got it.
+A drawing goes only from the drawer's phone to that table's TV, through our server, which keeps it in memory until the turn ends. It is never saved, shown on another phone or shared. No microphone is used and nothing is typed. A child under 13 draws and guesses like anyone else; their drawings show only on the table's TV.
+
+---
+
 ## For JD before submitting
 
 - The consent steps need the Twilio Verify secrets on production. Without them, step 3 says "We can't text a code right now" and nothing is sent.
@@ -54,3 +66,4 @@ Consent isn't needed to play. To test it, use one device as the child (a year un
 - If Practice, "Add a player" or the Start button get new words before release, update "Play alone".
 - The Daily Dish shows only while the server's `DAILY` flag is on. Turn it on before submitting, or App Review won't see it.
 - If the Home panel or its Play buttons get new words, update "Daily Dish".
+- Before pasting PURRTRAIT, check its button names (Join, Start, who got it) against the shipped Purrtrait screens.
