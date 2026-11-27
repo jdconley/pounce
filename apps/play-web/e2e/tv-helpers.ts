@@ -197,20 +197,32 @@ async function layDownIfMade(page: Page): Promise<boolean> {
 
 /**
  * One Cat Tower turn on the controller, if it's this phone's: draw from the deck, lay down the
- * level when the hand makes it (and `layDown` is on), then discard the last card by tap. Returns
- * what it did, or null off turn.
+ * level when the hand makes it (and `layDown` is on), then discard the last card by tap. Laying
+ * down turns the phone to the Table, so that turn and the rest are played there. Returns what it
+ * did, or null off turn.
  */
 export async function controllerTurn(page: Page, opts: { layDown?: boolean } = {}): Promise<null | "turn" | "laid"> {
   if (!(await ctMyTurn(page))) return null;
   const cards = page.locator(".card.mine .card-inner");
   const before = await cards.count();
+  // A phone that laid down earlier this game is on the Table (laying down turns it there).
+  const onTable = (await page.locator(".ctl").count()) === 0;
   await page.locator("#deck").click();
   await expect(cards).toHaveCount(before + 1);
-  const laid = opts.layDown ? await layDownIfMade(page) : false;
-  // Pick the right-most card, then the Discard button (a hit list, once laid down, may cover the pile).
+  const laid = opts.layDown && !onTable ? await layDownIfMade(page) : false;
   await expect.poll(() => cards.count()).toBeGreaterThan(0);
-  await cards.last().press("Enter");
-  await page.locator("#discard-btn:not([disabled])").click();
+  if (laid || onTable) {
+    // Laying down turned the phone to the Table, for its groups: discard there, by tap.
+    await expect(page.locator(".ctl")).toHaveCount(0);
+    await expect(page.locator("#view-switch").getByRole("button", { name: "Table", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".ct-table .group-zone").first()).toBeVisible();
+    await cards.last().press("Enter");
+    await page.locator("#discard:not([disabled])").click();
+  } else {
+    // Pick the right-most card, then the Discard button (a hit list, once laid down, may cover the pile).
+    await cards.last().press("Enter");
+    await page.locator("#discard-btn:not([disabled])").click();
+  }
   // A Cucumber at a table of three or more asks whom to skip; otherwise the card leaves the hand.
   // The turn is done when it has (the deck greys as soon as the draw lands, so it can't tell a
   // discard that went from one that didn't).

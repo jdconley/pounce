@@ -290,6 +290,8 @@ describe("an app that can't draw the tile game", { timeout: 60_000 }, () => {
     const { code, miaPhone, miaPad } = await family(mf);
     const onPhone = await eventually(() => tablesOf(mf, miaPhone, NEW_APP), (l) => l.some((t) => t.code === code));
     expect(onPhone.find((t) => t.code === code)).toMatchObject({ game: "tiles", status: "playing" });
+    // The tile game has no options: its entry is what it was before Birdwatch named its rule set.
+    expect(onPhone.find((t) => t.code === code)).not.toHaveProperty("options");
     // The tablet is the same player, so its list would have the table: it is left out.
     expect(await tablesOf(mf, miaPad, OLD_APP)).toEqual([]);
     expect(await tablesOf(mf, miaPad, { "x-pounce-games": "cat-tower" })).toEqual([]);

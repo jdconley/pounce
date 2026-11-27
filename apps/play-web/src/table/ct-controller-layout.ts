@@ -7,7 +7,8 @@
  * Everything along the top grows with the cards (`unit`) on a tablet. Pure geometry, tested at
  * every size it runs on.
  */
-import type { Insets } from "./ct-layout";
+import { trayLabelOf, type Insets, type TrayLabel } from "./ct-layout";
+
 import type { Rect } from "./drag";
 import type { Pose } from "./motion";
 
@@ -46,6 +47,8 @@ export type CtlLayout = {
   /** The deck and the discard, as big as fit (resting off turn). Each pose is a hand card's, scaled. */
   piles: { deck: Pose; discard: Pose; deckRect: Rect; discardRect: Rect };
   trays: Rect[];
+  /** Each tray's count ("2/3"): its font, and the room kept for it at the tray's left, clear of the tray's cards. */
+  trayLabel: TrayLabel;
   /** The open hit list, as tall as its rows: over the bottom of the piles' room, sitting on the buttons. */
   hits: Rect | null;
   /** The hit list's X, inside it. */
@@ -254,6 +257,7 @@ function layoutAt(input: CtlInput, cw: number, u: number, force = false): CtlLay
     status,
     piles: { deck: pose(deckRect, 5), discard: pose(discardRect, 6), deckRect, discardRect },
     trays,
+    trayLabel: trayLabelOf(trayH, input.width, input.text, u),
     hits,
     hitClose,
     actions,

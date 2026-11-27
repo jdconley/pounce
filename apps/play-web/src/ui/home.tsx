@@ -3,7 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 import { alertsCardDismissed, dismissAlertsCard, turnOnAlerts, useAlerts } from "../alerts";
 import { TodayDish, useDishOn } from "../daily/dish-home";
 import { art, RINGS } from "../lib/art";
-import { CATALOG, SHELF, titleOf, type GameId } from "../lib/catalog";
+import { CATALOG, SHELF, rulesLine, titleOf, type GameId } from "../lib/catalog";
 import { isRoomCode, navigate } from "../lib/router";
 import { api, type TableEntry } from "../net/api";
 import { promptInstall, useInstall } from "../pwa";
@@ -28,6 +28,7 @@ export function TableCard(props: { t: TableEntry; onOpen?: (code: string) => voi
   const people = (t.seats ?? []).filter((s) => s.kind === "human" && s.person);
   const first = people[0]?.person;
   const status = t.status === "lobby" ? "Waiting" : t.status === "over" ? "Game over" : t.yourTurn ? "Your turn" : "Playing";
+  const rules = rulesLine(t);
   return (
     <button
       type="button"
@@ -38,6 +39,7 @@ export function TableCard(props: { t: TableEntry; onOpen?: (code: string) => voi
       {t.yourTurn && t.status === "playing" ? <span class="turn-badge" aria-hidden="true"><Icon name="icon-paw-menu" size={26} /></span> : null}
       <Cat cat={first?.cat ?? 0} pose={t.status === "playing" ? "awake" : "idle"} size={64} />
       <strong class="outlined">{t.name ?? t.code}</strong>
+      {rules ? <span class="rules">{rules}</span> : null}
       <span class="sub">{status}</span>
       <span class="code">{t.code}</span>
       {/* Named by what it shows, then its game: a voice command can say what the eye reads. */}

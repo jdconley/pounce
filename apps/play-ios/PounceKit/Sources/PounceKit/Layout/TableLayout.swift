@@ -663,6 +663,10 @@ public struct TableLayout: Sendable {
         return CGRect(x: sortButton.x - d / 2, y: sortButton.y - d / 2, width: d, height: d)
     }
 
+    /// How far a laid row's name pill may hang past the row's left edge, over the bare rug
+    /// (`LaidZoneNode.placement`): rows keep that much clear of the tower tab and the screen's edge.
+    public static let laidNameOverhang: CGFloat = 8
+
     /// The widest the bottom seat's name pill gets.
     public static let seatTagWidth: CGFloat = 150
     public static let seatTagHeight: CGFloat = 26
@@ -808,8 +812,9 @@ public struct TableLayout: Sendable {
         var row = CGRect(x: x, y: midY - rowHeight / 2, width: width, height: rowHeight)
         let corner = sortButtonFrame.union(seatTagFrame)
         if row.intersects(corner) { row.size.width = max(corner.minX - 4 - row.minX, 0) }
-        if row.intersects(towerTab) {
-            let left = towerTab.maxX + 4
+        // Clear of the folded tower, with room for the row's name pill to hang past its left edge.
+        if row.insetBy(dx: -Self.laidNameOverhang, dy: 0).intersects(towerTab) {
+            let left = towerTab.maxX + 4 + Self.laidNameOverhang
             row = CGRect(x: left, y: row.minY, width: max(row.maxX - left, 0), height: row.height)
         }
         return row

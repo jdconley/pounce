@@ -42,3 +42,11 @@ export const showSwitch = (room: RoomView): boolean => room.screen === true && m
  * on Cards. Otherwise it shows the full table: with no TV every phone does, whatever the switch says.
  */
 export const showController = (room: RoomView, view: View): boolean => showSwitch(room) && view === "cards";
+
+/**
+ * The view after seat `seat` lays down: a phone on Cards whose own player laid down turns to the
+ * Table, to see the groups and hit onto them. Anyone else's lay down, or a phone already on
+ * Table, changes nothing. The Table is kept like a press of the switch; only the switch turns it back.
+ */
+export const viewAfterLayDown = (room: RoomView, view: View, seat: number): View =>
+  showController(room, view) && mySeats(room).includes(seat) ? "table" : view;
