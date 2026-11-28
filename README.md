@@ -137,11 +137,10 @@ Paste". Once the App Store has 1.1, every invite goes to the App Store with Past
 builds from 1.3, but its first App Store version is 1.4 (1.3 was pulled from review): until the
 App Store has 1.4, a Birdwatch invite sends iPhones to the beta and says the game is coming to the
 iPhone app, and the landing page, help and llms.txt say it plays in the browser and comes to the
-app in 1.4, now in App Review (`IN_REVIEW`). Toy Tumble
-needs 1.4, and no app build has it yet, the beta included (`BETA_LACKS`), so a Toy Tumble invite
-offers only Play in your browser, on every device, and says the game is coming to the iPhone app in
-1.4. Once TestFlight builds 1.4, take `tumble` out of `BETA_LACKS` and its invites work as
-Birdwatch's do. A Purrtrait table has no invite: it is joined only from the code on its TV, so its
+app in 1.4, now in App Review (`IN_REVIEW`). Toy Tumble also needs 1.4, and TestFlight has it
+since 1.4's first beta build cleared review on 27 November 2026, so its invites work as Birdwatch's
+do. A game no app build has yet, the beta included, goes in `BETA_LACKS` (empty now): its invites
+offer only Play in your browser, on every device, and say which version brings it to the iPhone. A Purrtrait table has no invite: it is joined only from the code on its TV, so its
 `/j/` page says "Scan the code on the TV.", and the TV's QR (`/e/<code>?near=<key>`) opens the web
 player only without the app: `PURRTRAIT_APPLINKS` is on since 1.4 went to App Review, so with the
 app it opens there (a 1.2 app can't draw it). The landing page, help and
