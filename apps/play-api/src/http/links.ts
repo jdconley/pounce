@@ -139,13 +139,13 @@ export const PURRTRAIT_SINCE = "1.4";
 export const GAME_SINCE: Readonly<Record<string, string>> = { tiles: "1.1", birdwatch: BIRDWATCH_SINCE, tumble: TUMBLE_SINCE, [DISH_GAME]: DISH_SINCE };
 
 /**
- * Games no build of the app plays yet, the TestFlight beta included: Toy Tumble, while TestFlight
- * still builds 1.3. A link to one of these tables plays in the browser on every device and says
- * which version brings it to the iPhone, with no Get Pounce, no beta and no App Store banner. Take
- * a game out once the beta plays it; `GAME_SINCE` then sends iPhones to the beta until the App
- * Store has it.
+ * Games no build of the app plays yet, the TestFlight beta included. A link to one of these tables
+ * plays in the browser on every device and says which version brings it to the iPhone, with no Get
+ * Pounce, no beta and no App Store banner. Take a game out once the beta plays it; `GAME_SINCE` then
+ * sends iPhones to the beta until the App Store has it. Empty since 1.4's first beta build cleared
+ * review (27 November 2026), which brought Toy Tumble to TestFlight.
  */
-export const BETA_LACKS: ReadonlySet<string> = new Set(["tumble"]);
+export const BETA_LACKS: ReadonlySet<string> = new Set<string>();
 
 /**
  * Whether the App Store's current version is at least `since`. Unknown counts as no: a page
